@@ -1,9 +1,10 @@
 "use client";
 
 import { ArrowRight, Eye, EyeOff, Info, Lock, Mail } from "lucide-react";
-import { type FormEvent, useId, useState } from "react";
+import { useRouter } from "next/navigation";
+import { type FormEvent, useId, useState, useTransition } from "react";
 
-import { site } from "@/lib/site";
+import { BUSINESS_DASHBOARD_PATH, site } from "@/lib/site";
 import { cn } from "@/lib/utils";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -12,6 +13,8 @@ type FieldErrors = { email?: string; password?: string };
 
 export function LoginForm() {
   const id = useId();
+  const router = useRouter();
+  const [isNavigating, startNavigation] = useTransition();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -33,9 +36,10 @@ export function LoginForm() {
       next.password = "Ingresá tu contraseña.";
     }
     setErrors(next);
+    setShowNotice(false);
     if (Object.keys(next).length > 0) return;
     setPassword("");
-    setShowNotice(true);
+    startNavigation(() => router.push(BUSINESS_DASHBOARD_PATH));
   }
 
   return (
@@ -163,9 +167,11 @@ export function LoginForm() {
 
         <button
           type="submit"
-          className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-forest text-[0.95rem] font-medium text-cream transition-colors outline-none hover:bg-forest-soft focus-visible:ring-3 focus-visible:ring-forest/40"
+          disabled={isNavigating}
+          aria-busy={isNavigating || undefined}
+          className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-forest text-[0.95rem] font-medium text-cream transition-colors outline-none hover:bg-forest-soft focus-visible:ring-3 focus-visible:ring-forest/40 disabled:cursor-wait disabled:opacity-80"
         >
-          Iniciar sesión
+          {isNavigating ? "Ingresando…" : "Iniciar sesión"}
           <ArrowRight className="size-4" aria-hidden />
         </button>
       </form>

@@ -9,6 +9,7 @@ export const site = {
 
 export const BUSINESS_PATH = "/empresas";
 export const BUSINESS_LOGIN_PATH = "/empresas/ingresar";
+export const BUSINESS_DASHBOARD_PATH = "/empresas/panel";
 
 export function getBusinessMailto() {
   const subject = encodeURIComponent("Senda Business — lista de espera");
