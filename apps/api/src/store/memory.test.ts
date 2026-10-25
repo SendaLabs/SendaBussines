@@ -88,6 +88,25 @@ test("a new payment stores a 64-hex sha256 and reads it back", async () => {
   assert.equal(dashboard.countryVolumes.length, 4);
 });
 
+test("a funding claim is a synchronous check-and-set and does not replace a contract id", async () => {
+  const store = createMemoryBusinessStore();
+  const created = store.addSupplierPayment(NEW_PAYMENT);
+  const first = store.claimSupplierFunding(created.id);
+  const second = store.claimSupplierFunding(created.id);
+  const [won, lost] = await Promise.all([first, second]);
+
+  assert.equal(won?.id, created.id);
+  assert.notEqual(won?.fundingClaimedAt, null);
+  assert.equal(lost, null);
+  assert.equal(await store.saveDeployedEscrow(created.id, "contract-a"), true);
+  assert.equal(await store.saveDeployedEscrow(created.id, "contract-b"), false);
+  assert.equal(store.readSupplierPayment(created.id)?.escrowContractId, "contract-a");
+  await store.releaseSupplierFunding(created.id);
+  assert.equal(store.readSupplierPayment(created.id)?.fundingClaimedAt, null);
+  assert.equal(await store.saveDeployedEscrow(created.id, "contract-c"), false);
+  assert.equal(store.readSupplierPayment(created.id)?.escrowContractId, "contract-a");
+});
+
 test("a used nonce cannot be reused", () => {
   const store = createMemoryBusinessStore();
   const now = new Date("2026-10-25T12:00:00.000Z");

@@ -33,7 +33,10 @@ const COMPANY_COLUMNS = `
     escrow_contract_id,
     fund_tx_hash,
     release_tx_hash,
-    funded_at
+    funded_at,
+    funding_claimed_at,
+    deploy_tx_hash,
+    pending_fund_tx_hash
   ),
   activity_entries (
     id,
@@ -78,17 +81,7 @@ export function createSupabaseBusinessStore(
       return insertSupplierPayment(client, input);
     },
     async findSupplierPayment(id) {
-      const { data, error } = await client
-        .from("supplier_payments")
-        .select(PAYMENT_COLUMNS)
-        .eq("id", id)
-        .maybeSingle();
-      if (error) {
-        if (error.code === "22P02") return null;
-        throw new Error("No se pudo leer el pago.", { cause: error.code });
-      }
-      if (!data) return null;
-      return storedPaymentFromRow(asRow(data));
+      return loadStoredPayment(client, id);
     },
     async supplierFundingSnapshot() {
       const { data: companies, error: companyError } = await client
@@ -126,16 +119,103 @@ export function createSupabaseBusinessStore(
         .eq("id", id);
       if (error) throw new Error("No se pudo guardar el pago.", { cause: error.code });
     },
+    async claimSupplierFunding(id) {
+      const { data, error } = await client
+        .from("supplier_payments")
+        .update({ funding_claimed_at: new Date().toISOString() })
+        .eq("id", id)
+        .eq("status", "pending")
+        .is("funding_claimed_at", null)
+        .select(PAYMENT_COLUMNS);
+      if (error) throw new Error("No se pudo reservar el pago.", { cause: error.code });
+      if (!Array.isArray(data) || data.length !== 1) return null;
+      return storedPaymentFromRow(asRow(data[0]));
+    },
+    async releaseSupplierFunding(id) {
+      const { error } = await client
+        .from("supplier_payments")
+        .update({ funding_claimed_at: null })
+        .eq("id", id)
+        .eq("status", "pending")
+        .not("funding_claimed_at", "is", null);
+      if (error) throw new Error("No se pudo reservar el pago.", { cause: error.code });
+    },
     async saveDeployedEscrow(id, escrowContractId) {
       const { data, error } = await client
         .from("supplier_payments")
-        .update({ escrow_contract_id: escrowContractId })
+        .update({
+          escrow_contract_id: escrowContractId,
+          deploy_tx_hash: null,
+        })
         .eq("id", id)
         .eq("status", "pending")
+        .is("escrow_contract_id", null)
+        .not("funding_claimed_at", "is", null)
         .select("id");
-      if (error || !Array.isArray(data) || data.length !== 1) {
-        throw new Error("No se pudo guardar el depósito.", { cause: error?.code });
-      }
+      if (error) throw new Error("No se pudo guardar el depósito.", { cause: error.code });
+      if (Array.isArray(data) && data.length === 1) return true;
+      const current = await loadStoredPayment(client, id);
+      return current?.escrowContractId === escrowContractId && current.fundingClaimedAt != null;
+    },
+    async savePendingDeployTx(id, txHash) {
+      const { data, error } = await client
+        .from("supplier_payments")
+        .update({ deploy_tx_hash: txHash })
+        .eq("id", id)
+        .eq("status", "pending")
+        .is("escrow_contract_id", null)
+        .is("deploy_tx_hash", null)
+        .not("funding_claimed_at", "is", null)
+        .select("id");
+      if (error) throw new Error("No se pudo guardar el depósito.", { cause: error.code });
+      if (Array.isArray(data) && data.length === 1) return true;
+      const current = await loadStoredPayment(client, id);
+      return (
+        current?.status === "pending" &&
+        current.fundingClaimedAt != null &&
+        current.escrowContractId == null &&
+        current.deployTxHash === txHash
+      );
+    },
+    async clearPendingDeployTx(id, txHash) {
+      const { error } = await client
+        .from("supplier_payments")
+        .update({ deploy_tx_hash: null })
+        .eq("id", id)
+        .eq("status", "pending")
+        .eq("deploy_tx_hash", txHash)
+        .not("funding_claimed_at", "is", null);
+      if (error) throw new Error("No se pudo guardar el depósito.", { cause: error.code });
+    },
+    async savePendingFundTx(id, txHash) {
+      const { data, error } = await client
+        .from("supplier_payments")
+        .update({ pending_fund_tx_hash: txHash })
+        .eq("id", id)
+        .eq("status", "pending")
+        .not("escrow_contract_id", "is", null)
+        .is("pending_fund_tx_hash", null)
+        .not("funding_claimed_at", "is", null)
+        .select("id");
+      if (error) throw new Error("No se pudo guardar el depósito.", { cause: error.code });
+      if (Array.isArray(data) && data.length === 1) return true;
+      const current = await loadStoredPayment(client, id);
+      return (
+        current?.status === "pending" &&
+        current.fundingClaimedAt != null &&
+        current.escrowContractId != null &&
+        current.pendingFundTxHash === txHash
+      );
+    },
+    async clearPendingFundTx(id, txHash) {
+      const { error } = await client
+        .from("supplier_payments")
+        .update({ pending_fund_tx_hash: null })
+        .eq("id", id)
+        .eq("status", "pending")
+        .eq("pending_fund_tx_hash", txHash)
+        .not("funding_claimed_at", "is", null);
+      if (error) throw new Error("No se pudo guardar el depósito.", { cause: error.code });
     },
     async markSupplierFunded(id, funded: FundedSupplierPayment) {
       const { data, error } = await client
@@ -145,9 +225,14 @@ export function createSupabaseBusinessStore(
           escrow_contract_id: funded.escrowContractId,
           fund_tx_hash: funded.fundTxHash,
           funded_at: funded.fundedAt,
+          funding_claimed_at: null,
+          deploy_tx_hash: null,
+          pending_fund_tx_hash: null,
         })
         .eq("id", id)
         .eq("status", "pending")
+        .eq("escrow_contract_id", funded.escrowContractId)
+        .not("funding_claimed_at", "is", null)
         .select("id");
       if (error || !Array.isArray(data) || data.length !== 1) {
         throw new Error("No se pudo registrar el fondeo.", { cause: error?.code });
@@ -169,8 +254,28 @@ const PAYMENT_COLUMNS = `
   escrow_contract_id,
   fund_tx_hash,
   release_tx_hash,
-  funded_at
+  funded_at,
+  funding_claimed_at,
+  deploy_tx_hash,
+  pending_fund_tx_hash
 `;
+
+async function loadStoredPayment(
+  client: SupabaseClient,
+  id: string,
+): Promise<ReturnType<typeof storedPaymentFromRow> | null> {
+  const { data, error } = await client
+    .from("supplier_payments")
+    .select(PAYMENT_COLUMNS)
+    .eq("id", id)
+    .maybeSingle();
+  if (error) {
+    if (error.code === "22P02") return null;
+    throw new Error("No se pudo leer el pago.", { cause: error.code });
+  }
+  if (!data) return null;
+  return storedPaymentFromRow(asRow(data));
+}
 
 function asRow(value: unknown): Record<string, unknown> {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
@@ -210,6 +315,9 @@ async function insertSupplierPayment(
     escrow_contract_id: null,
     fund_tx_hash: null,
     release_tx_hash: null,
+    funding_claimed_at: null,
+    deploy_tx_hash: null,
+    pending_fund_tx_hash: null,
     created_at: write.activity.at,
   });
   if (paymentError) {

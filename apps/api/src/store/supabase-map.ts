@@ -90,6 +90,9 @@ export function storedPaymentFromRow(payment: Record<string, unknown>): CompanyB
     fundTxHash: nullableString(payment, "fund_tx_hash"),
     releaseTxHash: nullableString(payment, "release_tx_hash"),
     fundedAt: nullableString(payment, "funded_at"),
+    fundingClaimedAt: nullableString(payment, "funding_claimed_at"),
+    deployTxHash: nullableString(payment, "deploy_tx_hash"),
+    pendingFundTxHash: nullableString(payment, "pending_fund_tx_hash"),
   };
 }
 

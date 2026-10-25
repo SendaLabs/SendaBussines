@@ -9,6 +9,9 @@ function unfunded(payment: BusinessUpcomingPayment): StoredSupplierPayment {
     fundTxHash: null,
     releaseTxHash: null,
     fundedAt: null,
+    fundingClaimedAt: null,
+    deployTxHash: null,
+    pendingFundTxHash: null,
   };
 }
 
