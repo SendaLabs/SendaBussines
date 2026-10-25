@@ -21,6 +21,9 @@ const envSchema = z.object({
   STELLAR_ADMIN_PUBLIC: z.string().refine(isEd25519PublicKey, {
     message: "must be a Stellar public key",
   }),
+  // Empty in tests and in .env.example. Never sent to the browser and never logged.
+  TRUSTLESS_WORK_API_KEY: z.string().default(""),
+  TREASURY_SECRET: z.string().default(""),
 });
 
 function isEd25519PublicKey(value: string): boolean {
