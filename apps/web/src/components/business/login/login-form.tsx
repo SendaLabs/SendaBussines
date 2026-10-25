@@ -1,45 +1,98 @@
 "use client";
 
-import { ArrowRight, Eye, EyeOff, Info, Lock, Mail } from "lucide-react";
+import { ArrowRight, Info, Wallet } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { type FormEvent, useId, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
+import type { ApiErrorBody, Sep10ChallengeResponse } from "@senda/shared";
 
+import { BUSINESS_API } from "@/lib/business-api";
 import { BUSINESS_DASHBOARD_PATH, site } from "@/lib/site";
 import { cn } from "@/lib/utils";
 
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-type FieldErrors = { email?: string; password?: string };
+const INSTALL_FREIGHTER = "Instalá Freighter para entrar.";
 
 export function LoginForm() {
-  const id = useId();
   const router = useRouter();
   const [isNavigating, startNavigation] = useTransition();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [remember, setRemember] = useState(true);
-  const [errors, setErrors] = useState<FieldErrors>({});
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [showNotice, setShowNotice] = useState(false);
+  const busy = pending || isNavigating;
 
-  const emailId = `${id}-email`;
-  const passwordId = `${id}-password`;
-  const forgotHref = `mailto:${site.email}?subject=${encodeURIComponent("Recuperar acceso a Senda Business")}`;
-
-  function onSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const next: FieldErrors = {};
-    if (!EMAIL_PATTERN.test(email.trim())) {
-      next.email = "Ingresá un email válido.";
-    }
-    if (!password) {
-      next.password = "Ingresá tu contraseña.";
-    }
-    setErrors(next);
+  async function onEnter() {
+    if (busy) return;
+    setError(null);
     setShowNotice(false);
-    if (Object.keys(next).length > 0) return;
-    setPassword("");
-    startNavigation(() => router.push(BUSINESS_DASHBOARD_PATH));
+    setPending(true);
+    try {
+      let freighter: typeof import("@stellar/freighter-api");
+      try {
+        freighter = await import("@stellar/freighter-api");
+      } catch {
+        setError(INSTALL_FREIGHTER);
+        return;
+      }
+
+      let connected = false;
+      try {
+        const result = await freighter.isConnected();
+        connected = result.isConnected && !result.error;
+      } catch {
+        connected = false;
+      }
+      if (!connected) {
+        setError(INSTALL_FREIGHTER);
+        return;
+      }
+
+      const access = await freighter.requestAccess();
+      if (access.error || !access.address) {
+        setError("No pudimos conectar la billetera.");
+        return;
+      }
+
+      const challengeResponse = await fetch(BUSINESS_API.sep10Challenge, {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ account: access.address }),
+      });
+      if (!challengeResponse.ok) {
+        setError(await readError(challengeResponse, "No se pudo preparar el ingreso."));
+        return;
+      }
+      const challenge: unknown = await challengeResponse.json();
+      if (!isChallenge(challenge)) {
+        setError("No se pudo preparar el ingreso.");
+        return;
+      }
+
+      const signed = await freighter.signTransaction(challenge.transaction, {
+        networkPassphrase: challenge.networkPassphrase,
+        address: access.address,
+      });
+      if (signed.error || !signed.signedTxXdr) {
+        setError("No se pudo verificar la firma.");
+        return;
+      }
+
+      const tokenResponse = await fetch(BUSINESS_API.sep10Token, {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ transaction: signed.signedTxXdr }),
+      });
+      if (tokenResponse.status !== 204) {
+        setError(await readError(tokenResponse, "No se pudo verificar la firma."));
+        return;
+      }
+
+      startNavigation(() => router.push(BUSINESS_DASHBOARD_PATH));
+    } catch {
+      setError("No pudimos completar el ingreso.");
+    } finally {
+      setPending(false);
+    }
   }
 
   return (
@@ -48,133 +101,31 @@ export function LoginForm() {
         Iniciar sesión
       </h1>
       <p className="mt-1.5 text-[0.95rem] text-charcoal/60">
-        Ingresá a tu cuenta de Senda Business.
+        Entrá con la billetera de la empresa.
       </p>
 
-      <form className="mt-8 space-y-5" onSubmit={onSubmit} noValidate>
-        <div>
-          <label
-            htmlFor={emailId}
-            className="mb-2 block text-sm font-medium text-charcoal"
+      <div className="mt-8">
+        {error ? (
+          <p
+            role="alert"
+            className="mb-4 rounded-xl border border-red-600/20 bg-white px-4 py-3 text-sm text-red-800"
           >
-            Email
-          </label>
-          <div className="relative">
-            <Mail
-              className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-charcoal/45"
-              strokeWidth={1.75}
-              aria-hidden
-            />
-            <input
-              id={emailId}
-              type="email"
-              name="email"
-              autoComplete="email"
-              inputMode="email"
-              placeholder="tu@empresa.com"
-              value={email}
-              onChange={(event) => {
-                setEmail(event.target.value);
-                if (errors.email) {
-                  setErrors((prev) => ({ ...prev, email: undefined }));
-                }
-              }}
-              aria-invalid={errors.email ? true : undefined}
-              aria-describedby={errors.email ? `${emailId}-error` : undefined}
-              className={inputClass(Boolean(errors.email))}
-            />
-          </div>
-          {errors.email ? (
-            <p id={`${emailId}-error`} className="mt-1.5 text-xs text-red-700">
-              {errors.email}
-            </p>
-          ) : null}
-        </div>
-
-        <div>
-          <label
-            htmlFor={passwordId}
-            className="mb-2 block text-sm font-medium text-charcoal"
-          >
-            Contraseña
-          </label>
-          <div className="relative">
-            <Lock
-              className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-charcoal/45"
-              strokeWidth={1.75}
-              aria-hidden
-            />
-            <input
-              id={passwordId}
-              type={showPassword ? "text" : "password"}
-              name="password"
-              autoComplete="current-password"
-              value={password}
-              onChange={(event) => {
-                setPassword(event.target.value);
-                if (errors.password) {
-                  setErrors((prev) => ({ ...prev, password: undefined }));
-                }
-              }}
-              aria-invalid={errors.password ? true : undefined}
-              aria-describedby={
-                errors.password ? `${passwordId}-error` : undefined
-              }
-              className={cn(inputClass(Boolean(errors.password)), "pr-11")}
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword((value) => !value)}
-              aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
-              aria-pressed={showPassword}
-              className="absolute top-1/2 right-1.5 flex size-9 -translate-y-1/2 items-center justify-center rounded-lg text-charcoal/50 outline-none hover:text-forest focus-visible:ring-2 focus-visible:ring-forest/30"
-            >
-              {showPassword ? (
-                <EyeOff className="size-4" strokeWidth={1.75} />
-              ) : (
-                <Eye className="size-4" strokeWidth={1.75} />
-              )}
-            </button>
-          </div>
-          {errors.password ? (
-            <p
-              id={`${passwordId}-error`}
-              className="mt-1.5 text-xs text-red-700"
-            >
-              {errors.password}
-            </p>
-          ) : null}
-        </div>
-
-        <div className="flex items-center justify-between gap-3 text-sm">
-          <label className="flex cursor-pointer items-center gap-2.5 text-charcoal">
-            <input
-              type="checkbox"
-              name="remember"
-              checked={remember}
-              onChange={(event) => setRemember(event.target.checked)}
-              className="size-4 cursor-pointer rounded accent-forest"
-            />
-            Recordarme
-          </label>
-          <a
-            href={forgotHref}
-            className="font-medium text-forest underline underline-offset-4 hover:no-underline"
-          >
-            ¿Olvidaste tu contraseña?
-          </a>
-        </div>
+            {error}
+          </p>
+        ) : null}
 
         <button
-          type="submit"
-          disabled={isNavigating}
-          aria-busy={isNavigating || undefined}
+          type="button"
+          onClick={onEnter}
+          disabled={busy}
+          aria-busy={busy || undefined}
           className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-forest text-[0.95rem] font-medium text-cream transition-colors outline-none hover:bg-forest-soft focus-visible:ring-3 focus-visible:ring-forest/40 disabled:cursor-wait disabled:opacity-80"
         >
-          {isNavigating ? "Ingresando…" : "Iniciar sesión"}
+          <Wallet className="size-4" aria-hidden />
+          {busy ? "Ingresando…" : "Entrar con la billetera"}
           <ArrowRight className="size-4" aria-hidden />
         </button>
-      </form>
+      </div>
 
       <div
         role="status"
@@ -220,12 +171,29 @@ export function LoginForm() {
   );
 }
 
-function inputClass(invalid: boolean) {
-  return cn(
-    "h-12 w-full rounded-xl border bg-white pr-3.5 pl-10 text-[0.95rem] text-charcoal outline-none transition-colors placeholder:text-charcoal/40 focus-visible:ring-3",
-    invalid
-      ? "border-red-600/70 focus-visible:ring-red-600/15"
-      : "border-stone focus-visible:border-forest/50 focus-visible:ring-forest/15",
+async function readError(response: Response, fallback: string): Promise<string> {
+  try {
+    const body: unknown = await response.json();
+    if (isApiError(body)) return body.error;
+  } catch {
+    return fallback;
+  }
+  return fallback;
+}
+
+function isApiError(value: unknown): value is ApiErrorBody {
+  if (typeof value !== "object" || value === null || !("error" in value)) return false;
+  return typeof value.error === "string" && value.error.length > 0;
+}
+
+function isChallenge(value: unknown): value is Sep10ChallengeResponse {
+  if (typeof value !== "object" || value === null) return false;
+  const record = value as Record<string, unknown>;
+  return (
+    typeof record.transaction === "string" &&
+    record.transaction.length > 0 &&
+    typeof record.networkPassphrase === "string" &&
+    record.networkPassphrase.length > 0
   );
 }
 

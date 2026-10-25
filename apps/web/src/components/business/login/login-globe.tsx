@@ -49,7 +49,8 @@ export function LoginGlobe() {
   const [useScene, setUseScene] = useState(false);
 
   useEffect(() => {
-    setUseScene(true);
+    const frame = requestAnimationFrame(() => setUseScene(true));
+    return () => cancelAnimationFrame(frame);
   }, []);
 
   return (

@@ -15,4 +15,22 @@ export interface NetworkInfo {
 export const API_ROUTES = {
   health: "/health",
   network: "/stellar/network",
+  sep10Challenge: "/business/sep10/challenge",
+  sep10Token: "/business/sep10/token",
+  businessSession: "/business/session",
 } as const;
+
+export const SESSION_COOKIE = "senda_session";
+
+export interface Sep10ChallengeResponse {
+  transaction: string;
+  networkPassphrase: string;
+}
+
+export interface BusinessSessionResponse {
+  account: string;
+}
+
+export interface ApiErrorBody {
+  error: string;
+}

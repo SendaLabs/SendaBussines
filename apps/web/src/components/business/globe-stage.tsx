@@ -66,7 +66,8 @@ export function BusinessGlobeStage({ label }: { label: string }) {
   const pillsRef = useRef<Array<HTMLSpanElement | null>>([]);
 
   useEffect(() => {
-    setUseScene(!reduce);
+    const frame = requestAnimationFrame(() => setUseScene(!reduce));
+    return () => cancelAnimationFrame(frame);
   }, [reduce]);
 
   useEffect(() => {

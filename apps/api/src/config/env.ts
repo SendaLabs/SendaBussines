@@ -1,7 +1,17 @@
+import { Keypair, StrKey } from "@stellar/stellar-sdk";
 import { config as loadDotenv } from "dotenv";
 import { z } from "zod";
 
 loadDotenv();
+
+function isStellarSecret(value: string): boolean {
+  try {
+    Keypair.fromSecret(value);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
@@ -14,6 +24,21 @@ const envSchema = z.object({
     .string()
     .url()
     .default("https://soroban-testnet.stellar.org"),
+  SEP10_SIGNING_SECRET: z.string().refine(isStellarSecret, {
+    message: "must be a Stellar secret key",
+  }),
+  SEP10_HOME_DOMAIN: z.string().min(1).default("localhost"),
+  STELLAR_ADMIN_PUBLIC: z.string().refine(
+    (value) => {
+      try {
+        return StrKey.isValidEd25519PublicKey(value);
+      } catch {
+        return false;
+      }
+    },
+    { message: "must be a Stellar public key" },
+  ),
+  SESSION_SECRET: z.string().min(32),
 });
 
 export type Env = z.infer<typeof envSchema>;

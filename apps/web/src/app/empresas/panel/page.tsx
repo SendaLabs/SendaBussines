@@ -3,6 +3,7 @@ import { Suspense } from "react";
 
 import { BusinessDashboardPage } from "@/components/business/dashboard/dashboard-page";
 import { parseDashboardFilters } from "@/components/business/dashboard/filters";
+import { requireBusinessSession } from "@/lib/session";
 
 export const metadata: Metadata = {
   title: "Panel",
@@ -19,6 +20,7 @@ async function PanelContent({
 }: {
   searchParams: Props["searchParams"];
 }) {
+  await requireBusinessSession();
   const query = await searchParams;
   return <BusinessDashboardPage filters={parseDashboardFilters(query)} />;
 }

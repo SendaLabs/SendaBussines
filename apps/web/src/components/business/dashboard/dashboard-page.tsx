@@ -6,7 +6,6 @@ import {
   FileText,
   House,
   Landmark,
-  LogOut,
   Receipt,
   type LucideIcon,
 } from "lucide-react";
@@ -18,12 +17,9 @@ import {
   type DemoDashboard,
 } from "@/components/business/dashboard/demo-data";
 import type { DashboardFilters } from "@/components/business/dashboard/filters";
+import { LogoutButton } from "@/components/business/dashboard/logout-button";
 import { MobileNav } from "@/components/business/dashboard/mobile-nav";
-import {
-  BUSINESS_DASHBOARD_PATH,
-  BUSINESS_LOGIN_PATH,
-  BUSINESS_PATH,
-} from "@/lib/site";
+import { BUSINESS_DASHBOARD_PATH, BUSINESS_PATH } from "@/lib/site";
 import { cn } from "@/lib/utils";
 
 const money = new Intl.NumberFormat("es-AR", {
@@ -227,13 +223,7 @@ function Sidebar({
             <p className="truncate text-sm font-medium">{user.fullName}</p>
             <p className="text-xs text-white/60">Admin</p>
           </div>
-          <Link
-            href={BUSINESS_LOGIN_PATH}
-            aria-label="Cerrar sesión"
-            className="rounded-lg p-2 text-white/70 outline-none hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-white/40"
-          >
-            <LogOut className="size-4" />
-          </Link>
+          <LogoutButton />
         </div>
       </div>
     </div>

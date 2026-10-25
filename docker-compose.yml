@@ -13,6 +13,10 @@ services:
       STELLAR_NETWORK: testnet
       HORIZON_URL: https://horizon-testnet.stellar.org
       SOROBAN_RPC_URL: https://soroban-testnet.stellar.org
+      SEP10_SIGNING_SECRET: ${SEP10_SIGNING_SECRET:-}
+      SEP10_HOME_DOMAIN: ${SEP10_HOME_DOMAIN:-localhost}
+      STELLAR_ADMIN_PUBLIC: ${STELLAR_ADMIN_PUBLIC:-}
+      SESSION_SECRET: ${SESSION_SECRET:-}
     volumes:
       - ./apps/api/src:/app/apps/api/src
       - ./packages/shared:/app/packages/shared
