@@ -95,7 +95,7 @@ export function BusinessFooter() {
           <p className="text-sm">Legal</p>
           <ul className="mt-3 space-y-2 text-sm">
             <li>
-              <span className="text-charcoal/55">© {new Date().getFullYear()} Senda</span>
+              <span className="text-charcoal/55">© 2026 Senda</span>
             </li>
           </ul>
         </div>
