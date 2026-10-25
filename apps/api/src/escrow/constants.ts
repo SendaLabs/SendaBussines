@@ -19,6 +19,20 @@ export const PLATFORM_FEE = 0;
 export const USDC_TESTNET_ISSUER =
   "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5";
 
+/**
+ * Escrow admin. Public key only.
+ * v2 rejects `ESCROW_ADMIN_ADDRESS_OVERLAPS_WITH_OTHER_ROLE`, so this is not the treasury.
+ */
+export const ESCROW_ADMIN_PUBLIC =
+  "GBUND7O5BRS4Y2Y5E6BO34V653XCAO6YW6GE2NMEMY6X7EJQMNSAR722";
+
+/**
+ * Dispute resolver. Public key only.
+ * v2 rejects `ESCROW_DISPUTE_RESOLVER_OVERLAPS_WITH_OTHER_ROLE`, so this matches no other role.
+ */
+export const ESCROW_DISPUTE_RESOLVER_PUBLIC =
+  "GDONFNOIJ66D6UJGZYCYJBTENCXDBKMCDMLGY5MF24XIK4PVA4FJIPMU";
+
 /** Public ledger copy. Must not include the supplier name or country. */
 export const ESCROW_TITLE = "Cuenta por pagar";
 export const ESCROW_DESCRIPTION = "Pago";

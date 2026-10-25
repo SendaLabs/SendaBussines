@@ -10,7 +10,11 @@ import {
   TransactionBuilder,
 } from "@stellar/stellar-sdk";
 import { TrustlessWorkClient } from "./client.js";
-import { USDC_TESTNET_ISSUER } from "./constants.js";
+import {
+  ESCROW_ADMIN_PUBLIC,
+  ESCROW_DISPUTE_RESOLVER_PUBLIC,
+  USDC_TESTNET_ISSUER,
+} from "./constants.js";
 import { EscrowClientError, TRUSTLINE_REJECTED } from "./errors.js";
 
 const SUPPLIER_NAME = "Molinos del Sur";
@@ -155,6 +159,57 @@ describe("Trustless Work client", () => {
     assert.equal(record.contractId, PREDICTED_CONTRACT_ID);
     assert.equal(record.funded, false);
     assert.equal(client.getRecord(ENGAGEMENT_ID)?.contractId, PREDICTED_CONTRACT_ID);
+  });
+
+  it("keeps admin and the dispute resolver off the treasury", async () => {
+    const treasury = Keypair.random();
+    const xdr = unsignedXdr(treasury);
+    const { client, calls } = clientWith(treasury, (call) => {
+      const path = new URL(call.url).pathname;
+      if (path === "/escrow/multi-release/v2/deploy") {
+        return json(200, {
+          unsignedXdr: xdr,
+          txHash: "prepared",
+          contractId: PREDICTED_CONTRACT_ID,
+        });
+      }
+      return json(200, {
+        txHash: "submitted-hash",
+        ledger: 42,
+        contractId: PREDICTED_CONTRACT_ID,
+      });
+    });
+
+    await client.deploy({
+      engagementId: ENGAGEMENT_ID,
+      amount: 100,
+      receiver: Keypair.random().publicKey(),
+    });
+
+    const deploy = calls[0];
+    assert.ok(deploy);
+    const payload = bodyOf(deploy) as {
+      signer: string;
+      roles: {
+        approvers: string[];
+        serviceProviders: string[];
+        releaseSigners: string[];
+        disputeResolvers: string[];
+        platform: string;
+        admin: string;
+      };
+    };
+    const treasuryPublic = treasury.publicKey();
+    assert.equal(payload.signer, treasuryPublic);
+    assert.deepEqual(payload.roles.approvers, [treasuryPublic]);
+    assert.deepEqual(payload.roles.serviceProviders, [treasuryPublic]);
+    assert.deepEqual(payload.roles.releaseSigners, [treasuryPublic]);
+    assert.equal(payload.roles.platform, treasuryPublic);
+    assert.equal(payload.roles.admin, ESCROW_ADMIN_PUBLIC);
+    assert.deepEqual(payload.roles.disputeResolvers, [ESCROW_DISPUTE_RESOLVER_PUBLIC]);
+    assert.notEqual(payload.roles.admin, treasuryPublic);
+    assert.notEqual(payload.roles.disputeResolvers[0], treasuryPublic);
+    assert.notEqual(payload.roles.admin, payload.roles.disputeResolvers[0]);
   });
 
   it("does not call the network when the receiver is the admin", async () => {

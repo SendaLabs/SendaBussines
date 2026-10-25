@@ -1,6 +1,8 @@
 import type { Env } from "../config/env.js";
 import {
+  ESCROW_ADMIN_PUBLIC,
   ESCROW_DESCRIPTION,
+  ESCROW_DISPUTE_RESOLVER_PUBLIC,
   ESCROW_TITLE,
   INDEXER_LAGGING,
   PATHS,
@@ -436,9 +438,9 @@ function deployBody(
       approvers: [adminPublicKey],
       serviceProviders: [adminPublicKey],
       releaseSigners: [adminPublicKey],
-      disputeResolvers: [adminPublicKey],
+      disputeResolvers: [ESCROW_DISPUTE_RESOLVER_PUBLIC],
       platform: adminPublicKey,
-      admin: adminPublicKey,
+      admin: ESCROW_ADMIN_PUBLIC,
     },
     trustline: {
       symbol: "USDC",
