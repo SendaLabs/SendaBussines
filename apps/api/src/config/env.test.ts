@@ -44,6 +44,10 @@ test("loadEnv accepts an empty Trustless Work key and treasury secret", () => {
   assert.equal(env.TRUSTLESS_WORK_API_KEY, "");
   assert.equal(env.TREASURY_SECRET, "");
   assert.equal(env.STELLAR_ADMIN_PUBLIC, ADMIN_ACCOUNT);
+  assert.equal(env.ESCROW_ADMIN_SECRET, "");
+  assert.equal(env.ESCROW_DISPUTE_RESOLVER_SECRET, "");
+  assert.equal(env.escrowAdminPublicKey, "");
+  assert.equal(env.escrowDisputeResolverPublicKey, "");
   assert.equal(env.SOROBAN_RPC_URL, "https://soroban-testnet.stellar.org");
 });
 
@@ -51,4 +55,75 @@ test("loadEnv does not require TRUSTLESS_WORK_API_KEY to be set", () => {
   const env = loadEnv(bookEnv);
   assert.equal(env.TRUSTLESS_WORK_API_KEY, "");
   assert.equal(env.TREASURY_SECRET, "");
+});
+
+test("loadEnv derives escrow role public keys and still allows an empty API key", () => {
+  const treasury = Keypair.random();
+  const escrowAdmin = Keypair.random();
+  const disputeResolver = Keypair.random();
+  const env = loadEnv({
+    ...bookEnv,
+    TRUSTLESS_WORK_API_KEY: "",
+    STELLAR_ADMIN_PUBLIC: treasury.publicKey(),
+    ESCROW_ADMIN_SECRET: escrowAdmin.secret(),
+    ESCROW_DISPUTE_RESOLVER_SECRET: disputeResolver.secret(),
+  });
+  assert.equal(env.TRUSTLESS_WORK_API_KEY, "");
+  assert.equal(env.escrowAdminPublicKey, escrowAdmin.publicKey());
+  assert.equal(env.escrowDisputeResolverPublicKey, disputeResolver.publicKey());
+});
+
+test("loadEnv rejects an escrow admin that is the treasury", () => {
+  const treasury = Keypair.random();
+  assert.throws(
+    () =>
+      loadEnv({
+        ...bookEnv,
+        STELLAR_ADMIN_PUBLIC: treasury.publicKey(),
+        ESCROW_ADMIN_SECRET: treasury.secret(),
+        ESCROW_DISPUTE_RESOLVER_SECRET: Keypair.random().secret(),
+      }),
+    /ESCROW_ADMIN_SECRET public key equals STELLAR_ADMIN_PUBLIC/,
+  );
+});
+
+test("loadEnv rejects a dispute resolver that is the treasury", () => {
+  const treasury = Keypair.random();
+  assert.throws(
+    () =>
+      loadEnv({
+        ...bookEnv,
+        STELLAR_ADMIN_PUBLIC: ` ${treasury.publicKey()} `,
+        ESCROW_ADMIN_SECRET: Keypair.random().secret(),
+        ESCROW_DISPUTE_RESOLVER_SECRET: treasury.secret(),
+      }),
+    /ESCROW_DISPUTE_RESOLVER_SECRET public key equals STELLAR_ADMIN_PUBLIC/,
+  );
+});
+
+test("loadEnv rejects role secrets that derive the same public key", () => {
+  const shared = Keypair.random();
+  assert.throws(
+    () =>
+      loadEnv({
+        ...bookEnv,
+        STELLAR_ADMIN_PUBLIC: Keypair.random().publicKey(),
+        ESCROW_ADMIN_SECRET: shared.secret(),
+        ESCROW_DISPUTE_RESOLVER_SECRET: shared.secret(),
+      }),
+    /derive the same public key/,
+  );
+});
+
+test("loadEnv rejects a role secret that is not a Stellar secret without echoing it", () => {
+  const secret = "not-a-secret";
+  assert.throws(
+    () => loadEnv({ ...bookEnv, ESCROW_ADMIN_SECRET: secret }),
+    (error: unknown) => {
+      assert.ok(error instanceof Error);
+      assert.equal(error.message.includes(secret), false);
+      assert.match(error.message, /ESCROW_ADMIN_SECRET is not a Stellar secret key/);
+      return true;
+    },
+  );
 });

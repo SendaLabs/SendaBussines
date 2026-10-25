@@ -35,7 +35,7 @@ const envSchema = z.object({
   SUPABASE_URL: z.string().url(),
   SUPABASE_SECRET_KEY: z.string().min(1),
   SESSION_SECRET: z.string().min(32),
-  STELLAR_ADMIN_PUBLIC: z.string().refine(isEd25519PublicKey, {
+  STELLAR_ADMIN_PUBLIC: z.string().trim().refine(isEd25519PublicKey, {
     message: "must be a Stellar public key",
   }),
   // Empty in tests and in .env.example. Never sent to the browser and never logged.
@@ -45,9 +45,17 @@ const envSchema = z.object({
     message: "must be a Stellar secret key",
   }),
   SEP10_HOME_DOMAIN: z.string().min(1).default("localhost"),
+  // Local secrets only. Public keys are derived in loadEnv.
+  ESCROW_ADMIN_SECRET: z.string().default(""),
+  ESCROW_DISPUTE_RESOLVER_SECRET: z.string().default(""),
 });
 
-export type Env = z.infer<typeof envSchema>;
+type EnvInput = z.infer<typeof envSchema>;
+
+export type Env = EnvInput & {
+  escrowAdminPublicKey: string;
+  escrowDisputeResolverPublicKey: string;
+};
 
 export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
   const parsed = envSchema.safeParse(source);
@@ -61,5 +69,66 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
   if (signingAccount === parsed.data.STELLAR_ADMIN_PUBLIC) {
     throw new Error("The SEP-10 signing account and the company account must be different.");
   }
-  return parsed.data;
+
+  const escrowAdminPublicKey = publicKeyFromSecret(
+    parsed.data.ESCROW_ADMIN_SECRET,
+    "ESCROW_ADMIN_SECRET",
+  );
+  const escrowDisputeResolverPublicKey = publicKeyFromSecret(
+    parsed.data.ESCROW_DISPUTE_RESOLVER_SECRET,
+    "ESCROW_DISPUTE_RESOLVER_SECRET",
+  );
+  assertDistinctEscrowRoles(
+    parsed.data.STELLAR_ADMIN_PUBLIC,
+    escrowAdminPublicKey,
+    escrowDisputeResolverPublicKey,
+  );
+
+  return {
+    ...parsed.data,
+    escrowAdminPublicKey,
+    escrowDisputeResolverPublicKey,
+  };
+}
+
+/** Empty stays empty. A non-empty value must be a Stellar secret; the secret is not echoed. */
+function publicKeyFromSecret(secret: string, name: string): string {
+  const trimmed = secret.trim();
+  if (trimmed === "") return "";
+  try {
+    return Keypair.fromSecret(trimmed).publicKey();
+  } catch {
+    throw new Error(`Invalid environment: ${name} is not a Stellar secret key`);
+  }
+}
+
+/**
+ * v2 rejects an escrow admin or dispute resolver that matches another role.
+ * Those two accounts can change a funded escrow or send the remaining funds.
+ */
+function assertDistinctEscrowRoles(
+  treasuryPublic: string,
+  escrowAdminPublicKey: string,
+  escrowDisputeResolverPublicKey: string,
+): void {
+  const treasury = treasuryPublic.trim();
+  if (escrowAdminPublicKey !== "" && escrowAdminPublicKey === treasury) {
+    throw new Error(
+      "Invalid environment: ESCROW_ADMIN_SECRET public key equals STELLAR_ADMIN_PUBLIC",
+    );
+  }
+  if (escrowDisputeResolverPublicKey !== "" && escrowDisputeResolverPublicKey === treasury) {
+    throw new Error(
+      "Invalid environment: ESCROW_DISPUTE_RESOLVER_SECRET public key equals STELLAR_ADMIN_PUBLIC",
+    );
+  }
+  if (
+    escrowAdminPublicKey !== "" &&
+    escrowDisputeResolverPublicKey !== "" &&
+    escrowAdminPublicKey === escrowDisputeResolverPublicKey
+  ) {
+    throw new Error(
+      "Invalid environment: ESCROW_ADMIN_SECRET and ESCROW_DISPUTE_RESOLVER_SECRET derive the same public key",
+    );
+  }
 }

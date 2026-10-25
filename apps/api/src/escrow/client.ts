@@ -1,8 +1,6 @@
 import type { Env } from "../config/env.js";
 import {
-  ESCROW_ADMIN_PUBLIC,
   ESCROW_DESCRIPTION,
-  ESCROW_DISPUTE_RESOLVER_PUBLIC,
   ESCROW_TITLE,
   INDEXER_LAGGING,
   PATHS,
@@ -73,6 +71,8 @@ export type TrustlessWorkClientOptions = {
   apiKey: string;
   treasurySecret: string;
   adminPublicKey: string;
+  escrowAdminPublicKey: string;
+  disputeResolverPublicKey: string;
   sorobanRpcUrl?: string;
   fetchImpl?: typeof fetch;
 };
@@ -99,6 +99,8 @@ export class TrustlessWorkClient {
   private readonly apiKey: string;
   private readonly treasurySecret: string;
   private readonly adminPublicKey: string;
+  private readonly escrowAdminPublicKey: string;
+  private readonly disputeResolverPublicKey: string;
   private readonly sorobanRpcUrl: string;
   private readonly fetchImpl: typeof fetch;
   private readonly records = new Map<string, StoredEscrow>();
@@ -107,6 +109,8 @@ export class TrustlessWorkClient {
     this.apiKey = options.apiKey;
     this.treasurySecret = options.treasurySecret;
     this.adminPublicKey = options.adminPublicKey.trim();
+    this.escrowAdminPublicKey = options.escrowAdminPublicKey.trim();
+    this.disputeResolverPublicKey = options.disputeResolverPublicKey.trim();
     this.sorobanRpcUrl = options.sorobanRpcUrl ?? SOROBAN_TESTNET_RPC;
     this.fetchImpl = options.fetchImpl ?? fetch;
   }
@@ -120,7 +124,11 @@ export class TrustlessWorkClient {
     const receiver = input.receiver.trim();
     const amount = assertAmount(input.amount);
     assertEngagementId(input.engagementId);
-    if (receiver === this.adminPublicKey) {
+    if (
+      receiver === this.adminPublicKey ||
+      receiver === this.escrowAdminPublicKey ||
+      receiver === this.disputeResolverPublicKey
+    ) {
       throw new EscrowClientError(409, RECEIVER_IS_ADMIN);
     }
     this.assertTreasury();
@@ -129,6 +137,8 @@ export class TrustlessWorkClient {
       engagementId: input.engagementId,
       amount,
       receiver,
+      escrowAdminPublicKey: this.escrowAdminPublicKey,
+      disputeResolverPublicKey: this.disputeResolverPublicKey,
     }), DEPLOY_FAILED);
 
     const submitted = await this.submit(prepared.unsignedXdr, DEPLOY_FAILED);
@@ -424,6 +434,8 @@ export function createTrustlessWorkClientFromEnv(
     apiKey: env.TRUSTLESS_WORK_API_KEY,
     treasurySecret: env.TREASURY_SECRET,
     adminPublicKey: env.STELLAR_ADMIN_PUBLIC,
+    escrowAdminPublicKey: env.escrowAdminPublicKey,
+    disputeResolverPublicKey: env.escrowDisputeResolverPublicKey,
     sorobanRpcUrl: env.SOROBAN_RPC_URL,
     fetchImpl,
   });
@@ -431,7 +443,13 @@ export function createTrustlessWorkClientFromEnv(
 
 function deployBody(
   adminPublicKey: string,
-  input: { engagementId: string; amount: number; receiver: string },
+  input: {
+    engagementId: string;
+    amount: number;
+    receiver: string;
+    escrowAdminPublicKey: string;
+    disputeResolverPublicKey: string;
+  },
 ): unknown {
   return {
     signer: adminPublicKey,
@@ -443,9 +461,9 @@ function deployBody(
       approvers: [adminPublicKey],
       serviceProviders: [adminPublicKey],
       releaseSigners: [adminPublicKey],
-      disputeResolvers: [ESCROW_DISPUTE_RESOLVER_PUBLIC],
+      disputeResolvers: [input.disputeResolverPublicKey],
       platform: adminPublicKey,
-      admin: ESCROW_ADMIN_PUBLIC,
+      admin: input.escrowAdminPublicKey,
     },
     trustline: {
       symbol: "USDC",
