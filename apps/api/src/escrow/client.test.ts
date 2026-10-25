@@ -3,19 +3,17 @@ import { describe, it } from "node:test";
 import {
   Account,
   Address,
+  Asset,
   Keypair,
   Networks,
   Operation,
   StrKey,
   TransactionBuilder,
 } from "@stellar/stellar-sdk";
-import { TrustlessWorkClient } from "./client.js";
-import {
-  ESCROW_ADMIN_PUBLIC,
-  ESCROW_DISPUTE_RESOLVER_PUBLIC,
-  USDC_TESTNET_ISSUER,
-} from "./constants.js";
-import { EscrowClientError, TRUSTLINE_REJECTED } from "./errors.js";
+import { loadEnv } from "../config/env.js";
+import { createTrustlessWorkClientFromEnv, TrustlessWorkClient } from "./client.js";
+import { USDC_TESTNET_ISSUER } from "./constants.js";
+import { EscrowClientError, SIGN_FAILED, TRUSTLINE_REJECTED } from "./errors.js";
 
 const SUPPLIER_NAME = "Molinos del Sur";
 const COUNTRY = "Paraguay";
@@ -36,7 +34,31 @@ function unsignedXdr(source: Keypair): string {
     networkPassphrase: Networks.TESTNET,
     timebounds: { minTime: 0, maxTime: 0 },
   })
-    .addOperation(Operation.manageData({ name: "senda", value: "pago" }))
+    .addOperation(
+      Operation.invokeContractFunction({
+        contract: contractId(9),
+        function: "deploy",
+        args: [],
+      }),
+    )
+    .build()
+    .toXDR();
+}
+
+function paymentXdr(source: Keypair): string {
+  const account = new Account(source.publicKey(), "100");
+  return new TransactionBuilder(account, {
+    fee: "100",
+    networkPassphrase: Networks.TESTNET,
+    timebounds: { minTime: 0, maxTime: 0 },
+  })
+    .addOperation(
+      Operation.payment({
+        destination: Keypair.random().publicKey(),
+        asset: Asset.native(),
+        amount: "1",
+      }),
+    )
     .build()
     .toXDR();
 }
@@ -63,8 +85,15 @@ function bodyOf(call: Call): unknown {
 function clientWith(
   treasury: Keypair,
   handler: (call: Call) => Response,
-): { client: TrustlessWorkClient; calls: Call[] } {
+): {
+  client: TrustlessWorkClient;
+  calls: Call[];
+  escrowAdmin: Keypair;
+  disputeResolver: Keypair;
+} {
   const calls: Call[] = [];
+  const escrowAdmin = Keypair.random();
+  const disputeResolver = Keypair.random();
   const fetchImpl: typeof fetch = async (input, init) => {
     const url =
       typeof input === "string"
@@ -80,10 +109,12 @@ function clientWith(
     apiKey: "test-key",
     treasurySecret: treasury.secret(),
     adminPublicKey: treasury.publicKey(),
+    escrowAdminPublicKey: escrowAdmin.publicKey(),
+    disputeResolverPublicKey: disputeResolver.publicKey(),
     sorobanRpcUrl: "https://soroban.test/rpc",
     fetchImpl,
   });
-  return { client, calls };
+  return { client, calls, escrowAdmin, disputeResolver };
 }
 
 describe("Trustless Work client", () => {
@@ -164,7 +195,7 @@ describe("Trustless Work client", () => {
   it("keeps admin and the dispute resolver off the treasury", async () => {
     const treasury = Keypair.random();
     const xdr = unsignedXdr(treasury);
-    const { client, calls } = clientWith(treasury, (call) => {
+    const { client, calls, escrowAdmin, disputeResolver } = clientWith(treasury, (call) => {
       const path = new URL(call.url).pathname;
       if (path === "/escrow/multi-release/v2/deploy") {
         return json(200, {
@@ -205,8 +236,8 @@ describe("Trustless Work client", () => {
     assert.deepEqual(payload.roles.serviceProviders, [treasuryPublic]);
     assert.deepEqual(payload.roles.releaseSigners, [treasuryPublic]);
     assert.equal(payload.roles.platform, treasuryPublic);
-    assert.equal(payload.roles.admin, ESCROW_ADMIN_PUBLIC);
-    assert.deepEqual(payload.roles.disputeResolvers, [ESCROW_DISPUTE_RESOLVER_PUBLIC]);
+    assert.equal(payload.roles.admin, escrowAdmin.publicKey());
+    assert.deepEqual(payload.roles.disputeResolvers, [disputeResolver.publicKey()]);
     assert.notEqual(payload.roles.admin, treasuryPublic);
     assert.notEqual(payload.roles.disputeResolvers[0], treasuryPublic);
     assert.notEqual(payload.roles.admin, payload.roles.disputeResolvers[0]);
@@ -235,6 +266,128 @@ describe("Trustless Work client", () => {
     );
     assert.equal(calls.length, 0);
     assert.equal(client.getRecord(ENGAGEMENT_ID), undefined);
+  });
+
+  it("does not call the network when the receiver is the escrow admin or the dispute resolver", async () => {
+    const treasury = Keypair.random();
+    const { client, calls, escrowAdmin, disputeResolver } = clientWith(treasury, () => {
+      throw new Error("fetch should not run");
+    });
+
+    for (const receiver of [escrowAdmin.publicKey(), disputeResolver.publicKey()]) {
+      await assert.rejects(
+        () =>
+          client.deploy({
+            engagementId: ENGAGEMENT_ID,
+            amount: 100,
+            receiver,
+          }),
+        (error: unknown) => {
+          assert.ok(error instanceof EscrowClientError);
+          assert.equal(error.statusCode, 409);
+          assert.equal(error.body.error, "El proveedor no puede ser la cuenta de la empresa.");
+          return true;
+        },
+      );
+    }
+
+    assert.equal(calls.length, 0);
+    assert.equal(client.getRecord(ENGAGEMENT_ID), undefined);
+  });
+
+  it("does not sign or submit a payment returned as unsigned XDR", async () => {
+    const treasury = Keypair.random();
+    const { client, calls } = clientWith(treasury, () =>
+      json(200, {
+        unsignedXdr: paymentXdr(treasury),
+        txHash: "prepared",
+        contractId: PREDICTED_CONTRACT_ID,
+      }),
+    );
+
+    await assert.rejects(
+      () =>
+        client.deploy({
+          engagementId: ENGAGEMENT_ID,
+          amount: 100,
+          receiver: Keypair.random().publicKey(),
+        }),
+      (error: unknown) => {
+        assert.ok(error instanceof EscrowClientError);
+        assert.equal(error.statusCode, 502);
+        assert.equal(error.body.error, SIGN_FAILED);
+        return true;
+      },
+    );
+
+    assert.equal(calls.length, 1);
+    assert.equal(new URL(calls[0]?.url ?? "").pathname, "/escrow/multi-release/v2/deploy");
+    assert.equal(client.getRecord(ENGAGEMENT_ID), undefined);
+  });
+
+  it("deploys with the public keys derived from the role secrets", async () => {
+    const treasury = Keypair.random();
+    const escrowAdmin = Keypair.random();
+    const disputeResolver = Keypair.random();
+    const env = loadEnv({
+      TRUSTLESS_WORK_API_KEY: "",
+      TREASURY_SECRET: treasury.secret(),
+      STELLAR_ADMIN_PUBLIC: treasury.publicKey(),
+      ESCROW_ADMIN_SECRET: escrowAdmin.secret(),
+      ESCROW_DISPUTE_RESOLVER_SECRET: disputeResolver.secret(),
+    });
+    const xdr = unsignedXdr(treasury);
+    const calls: Call[] = [];
+    const client = createTrustlessWorkClientFromEnv(env, async (input, init) => {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url;
+      const call = { url, init };
+      calls.push(call);
+      const path = new URL(url).pathname;
+      if (path.endsWith("/deploy")) {
+        return json(200, {
+          unsignedXdr: xdr,
+          txHash: "prepared",
+          contractId: PREDICTED_CONTRACT_ID,
+        });
+      }
+      return json(200, {
+        txHash: "submitted-hash",
+        ledger: 42,
+        contractId: PREDICTED_CONTRACT_ID,
+      });
+    });
+
+    await client.deploy({
+      engagementId: ENGAGEMENT_ID,
+      amount: 100,
+      receiver: Keypair.random().publicKey(),
+    });
+
+    const deploy = calls[0];
+    assert.ok(deploy);
+    const payload = bodyOf(deploy) as {
+      signer: string;
+      roles: {
+        approvers: string[];
+        serviceProviders: string[];
+        releaseSigners: string[];
+        disputeResolvers: string[];
+        platform: string;
+        admin: string;
+      };
+    };
+    assert.equal(payload.signer, treasury.publicKey());
+    assert.deepEqual(payload.roles.approvers, [treasury.publicKey()]);
+    assert.deepEqual(payload.roles.serviceProviders, [treasury.publicKey()]);
+    assert.deepEqual(payload.roles.releaseSigners, [treasury.publicKey()]);
+    assert.equal(payload.roles.platform, treasury.publicKey());
+    assert.equal(payload.roles.admin, escrowAdmin.publicKey());
+    assert.deepEqual(payload.roles.disputeResolvers, [disputeResolver.publicKey()]);
   });
 
   it("turns a trustline 422 into an API error and does not mark the payment funded", async () => {

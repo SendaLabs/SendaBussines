@@ -1,7 +1,9 @@
 import {
   Address,
+  FeeBumpTransaction,
   Keypair,
   Networks,
+  Transaction,
   TransactionBuilder,
   xdr,
 } from "@stellar/stellar-sdk";
@@ -44,10 +46,37 @@ export function signUnsignedXdr(
   const keypair = treasuryKeypair(secret, adminPublicKey);
   try {
     const transaction = TransactionBuilder.fromXDR(unsignedXdr, Networks.TESTNET);
+    assertTreasuryInvocation(transaction, keypair.publicKey());
     transaction.sign(keypair);
     return transaction.toXDR();
   } catch (error) {
     if (error instanceof EscrowClientError) throw error;
+    throw new EscrowClientError(502, SIGN_FAILED);
+  }
+}
+
+/**
+ * The treasury signs one contract call and nothing else.
+ * setOptions, payments, fee bumps, and any other shape are rejected before sign().
+ */
+function assertTreasuryInvocation(
+  transaction: Transaction | FeeBumpTransaction,
+  treasuryPublicKey: string,
+): asserts transaction is Transaction {
+  if (!(transaction instanceof Transaction)) {
+    throw new EscrowClientError(502, SIGN_FAILED);
+  }
+  if (transaction.source !== treasuryPublicKey) {
+    throw new EscrowClientError(502, SIGN_FAILED);
+  }
+  if (transaction.operations.length !== 1) {
+    throw new EscrowClientError(502, SIGN_FAILED);
+  }
+  const operation = transaction.operations[0];
+  if (operation === undefined || operation.type !== "invokeHostFunction") {
+    throw new EscrowClientError(502, SIGN_FAILED);
+  }
+  if (operation.source !== undefined && operation.source !== treasuryPublicKey) {
     throw new EscrowClientError(502, SIGN_FAILED);
   }
 }
