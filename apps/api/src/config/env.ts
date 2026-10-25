@@ -1,3 +1,4 @@
+import { StrKey } from "@stellar/stellar-sdk";
 import { config as loadDotenv } from "dotenv";
 import { z } from "zod";
 
@@ -17,7 +18,18 @@ const envSchema = z.object({
   SUPABASE_URL: z.string().url(),
   SUPABASE_SECRET_KEY: z.string().min(1),
   SESSION_SECRET: z.string().min(32),
+  STELLAR_ADMIN_PUBLIC: z.string().refine(isEd25519PublicKey, {
+    message: "must be a Stellar public key",
+  }),
 });
+
+function isEd25519PublicKey(value: string): boolean {
+  try {
+    return StrKey.isValidEd25519PublicKey(value);
+  } catch {
+    return false;
+  }
+}
 
 export type Env = z.infer<typeof envSchema>;
 

@@ -6,6 +6,8 @@ import type {
   BusinessDashboard,
   BusinessDashboardFilters,
   BusinessUpcomingPayment,
+  SupplierPaymentCreated,
+  SupplierPaymentInput,
 } from "@senda/shared";
 
 export interface StoredSupplierPayment extends BusinessUpcomingPayment {
@@ -15,13 +17,7 @@ export interface StoredSupplierPayment extends BusinessUpcomingPayment {
   releaseTxHash: string | null;
 }
 
-export interface NewSupplierPayment {
-  supplierName: string;
-  stellarAccount: string;
-  country: BusinessCountry;
-  amountUsd: number;
-  dueOn: string;
-}
+export type NewSupplierPayment = SupplierPaymentInput;
 
 export interface Sep10Nonce {
   nonce: string;
@@ -48,4 +44,5 @@ export interface CompanyBook {
 
 export interface BusinessStore {
   getDashboard(filters: BusinessDashboardFilters): Promise<BusinessDashboard>;
+  createSupplierPayment(input: NewSupplierPayment): Promise<SupplierPaymentCreated>;
 }

@@ -1,7 +1,6 @@
-import { randomUUID } from "node:crypto";
 import { buildDashboard } from "../dashboard/project.js";
-import { paymentMetadataSha256 } from "./payment-metadata.js";
 import { DEMO_BOOK } from "./seed.js";
+import { supplierPaymentWrite } from "./supplier-payment-write.js";
 import type {
   BusinessStore,
   CompanyBook,
@@ -34,6 +33,13 @@ export function createMemoryBusinessStore(book: CompanyBook = DEMO_BOOK): Memory
   const state = structuredClone(book);
   const nonces = new Map<string, Sep10Nonce>();
 
+  function record(input: NewSupplierPayment) {
+    const write = supplierPaymentWrite(input);
+    state.payments.push({ ...write.payment });
+    state.activity.push({ ...write.activity });
+    return write;
+  }
+
   return {
     async getDashboard(filters) {
       return buildDashboard(state, filters);
@@ -42,23 +48,10 @@ export function createMemoryBusinessStore(book: CompanyBook = DEMO_BOOK): Memory
       return state.monthlyCapUsd;
     },
     addSupplierPayment(input) {
-      const metadataSha256 = paymentMetadataSha256(input);
-      const payment: StoredSupplierPayment = {
-        id: randomUUID(),
-        supplier: input.supplierName,
-        country: input.country,
-        amount: input.amountUsd,
-        dueDate: input.dueOn,
-        status: "pending",
-        stellarAccount: input.stellarAccount,
-        fundedTxHash: null,
-        metadataSha256,
-        escrowContractId: null,
-        fundTxHash: null,
-        releaseTxHash: null,
-      };
-      state.payments.push(payment);
-      return copyPayment(payment);
+      return copyPayment(record(input).payment);
+    },
+    async createSupplierPayment(input) {
+      return record(input).created;
     },
     readSupplierPayment(id) {
       const payment = state.payments.find((item) => item.id === id);

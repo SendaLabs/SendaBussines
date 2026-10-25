@@ -77,6 +77,14 @@ test("a new payment stores a 64-hex sha256 and reads it back", async () => {
   assert.equal(dashboard.kpis.balance.value, 248420);
   assert.equal(dashboard.kpis.spend.value, 18290);
   assert.equal(dashboard.kpis.international.value, 72640);
+  assert.deepEqual(dashboard.kpis.payable, { value: 10425, invoices: 6 });
+  assert.equal(dashboard.activity[0]?.kind, "supplierPayment");
+  assert.equal(dashboard.activity[0]?.counterparty, "Taller Norte");
+  assert.equal(dashboard.activity[0]?.amount, -100);
+  assert.equal(dashboard.activity[0]?.from, "AR");
+  assert.equal(dashboard.activity[0]?.to, "AR");
+  assert.equal(dashboard.cashFlow.length, 12);
+  assert.equal(dashboard.countryVolumes.length, 4);
 });
 
 test("a used nonce cannot be reused", () => {

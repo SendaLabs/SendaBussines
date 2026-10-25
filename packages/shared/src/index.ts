@@ -104,4 +104,181 @@ export const API_ROUTES = {
   health: "/health",
   network: "/stellar/network",
   businessDashboard: "/business/dashboard",
+  businessSupplierPayments: "/business/supplier-payments",
 } as const;
+
+export interface ApiErrorBody {
+  error: string;
+}
+
+export const SUPPLIER_NAME_MAX_LENGTH = 80;
+
+export const SUPPLIER_PAYMENT_ERRORS = {
+  supplierName: "Ingresá el nombre del proveedor.",
+  supplierNameLength: "El nombre del proveedor puede tener hasta 80 caracteres.",
+  stellarAccount: "Ingresá una cuenta Stellar válida.",
+  treasury: "El proveedor no puede ser la cuenta de la empresa.",
+  country: "Elegí un país.",
+  amountUsd: "El monto tiene que ser de al menos 1 USD.",
+  dueOn: "Elegí un vencimiento.",
+} as const;
+
+export type SupplierPaymentField =
+  | "supplierName"
+  | "stellarAccount"
+  | "country"
+  | "amountUsd"
+  | "dueOn";
+
+/** Fields the company sends to its own API. This object is not a ledger payload. */
+export interface SupplierPaymentInput {
+  supplierName: string;
+  stellarAccount: string;
+  country: BusinessCountry;
+  amountUsd: number;
+  dueOn: string;
+}
+
+export interface SupplierPaymentCreated {
+  id: string;
+  supplierName: string;
+  stellarAccount: string;
+  country: BusinessCountry;
+  amountUsd: number;
+  dueOn: string;
+  status: "pending";
+  fundedTxHash: null;
+  metadataSha256: string;
+  activity: {
+    id: string;
+    kind: "supplierPayment";
+    counterparty: string;
+    amount: number;
+    from: "AR";
+    to: BusinessCountry;
+    at: string;
+  };
+}
+
+const POSTGRES_INT_MAX = 2_147_483_647;
+
+export function parseSupplierPayment(
+  body: unknown,
+  options: {
+    treasuryAccount: string;
+    isEd25519PublicKey: (account: string) => boolean;
+  },
+):
+  | { ok: true; value: SupplierPaymentInput }
+  | {
+      ok: false;
+      error: string;
+      fields: Partial<Record<SupplierPaymentField, string>>;
+    } {
+  const record = isRecord(body) ? body : {};
+  const fields: Partial<Record<SupplierPaymentField, string>> = {};
+
+  const rawName = record.supplierName;
+  const supplierName = typeof rawName === "string" ? rawName.trim() : "";
+  if (supplierName.length === 0) {
+    fields.supplierName = SUPPLIER_PAYMENT_ERRORS.supplierName;
+  } else if (supplierName.length > SUPPLIER_NAME_MAX_LENGTH) {
+    fields.supplierName = SUPPLIER_PAYMENT_ERRORS.supplierNameLength;
+  }
+
+  const rawAccount = record.stellarAccount;
+  const stellarAccount = typeof rawAccount === "string" ? rawAccount.trim().toUpperCase() : "";
+  let accountIsValid = false;
+  try {
+    accountIsValid =
+      stellarAccount.length > 0 && options.isEd25519PublicKey(stellarAccount);
+  } catch {
+    accountIsValid = false;
+  }
+  if (!accountIsValid) {
+    fields.stellarAccount = SUPPLIER_PAYMENT_ERRORS.stellarAccount;
+  } else if (stellarAccount === options.treasuryAccount) {
+    fields.stellarAccount = SUPPLIER_PAYMENT_ERRORS.treasury;
+  }
+
+  const rawCountry = record.country;
+  const country = typeof rawCountry === "string" ? rawCountry : "";
+  if (!isBusinessCountry(country)) {
+    fields.country = SUPPLIER_PAYMENT_ERRORS.country;
+  }
+
+  const amountUsd = wholeUsd(record.amountUsd);
+  if (amountUsd === null) {
+    fields.amountUsd = SUPPLIER_PAYMENT_ERRORS.amountUsd;
+  }
+
+  const rawDue = record.dueOn;
+  const dueOn = typeof rawDue === "string" ? rawDue.trim() : "";
+  if (!isCalendarDate(dueOn)) {
+    fields.dueOn = SUPPLIER_PAYMENT_ERRORS.dueOn;
+  }
+
+  const error =
+    fields.supplierName ??
+    fields.stellarAccount ??
+    fields.country ??
+    fields.amountUsd ??
+    fields.dueOn;
+  if (error || !isBusinessCountry(country) || amountUsd === null) {
+    return {
+      ok: false,
+      error: error ?? SUPPLIER_PAYMENT_ERRORS.supplierName,
+      fields,
+    };
+  }
+
+  return {
+    ok: true,
+    value: {
+      supplierName,
+      stellarAccount,
+      country,
+      amountUsd,
+      dueOn,
+    },
+  };
+}
+
+export function isBusinessCountry(value: string): value is BusinessCountry {
+  return (BUSINESS_COUNTRIES as readonly string[]).includes(value);
+}
+
+function wholeUsd(value: unknown): number | null {
+  if (typeof value === "number") {
+    if (!Number.isSafeInteger(value) || value > POSTGRES_INT_MAX) return null;
+    return /^[1-9]\d*$/.test(String(value)) ? value : null;
+  }
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!/^[1-9]\d*$/.test(trimmed)) return null;
+  const parsed = Number(trimmed);
+  if (!Number.isSafeInteger(parsed) || parsed > POSTGRES_INT_MAX) return null;
+  return parsed;
+}
+
+function isCalendarDate(value: string): boolean {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return false;
+  const yearText = match[1];
+  const monthText = match[2];
+  const dayText = match[3];
+  if (yearText === undefined || monthText === undefined || dayText === undefined) return false;
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
+  );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}

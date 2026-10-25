@@ -17,11 +17,8 @@ import type { BusinessDashboard } from "@senda/shared";
 
 import type { DashboardFilters } from "@/components/business/dashboard/filters";
 import { MobileNav } from "@/components/business/dashboard/mobile-nav";
-import {
-  BUSINESS_DASHBOARD_PATH,
-  BUSINESS_LOGIN_PATH,
-  BUSINESS_PATH,
-} from "@/lib/site";
+import { NewSupplierPaymentButton } from "@/components/business/dashboard/new-supplier-payment-dialog";
+import { BUSINESS_DASHBOARD_PATH, BUSINESS_LOGIN_PATH } from "@/lib/site";
 import { cn } from "@/lib/utils";
 
 const money = new Intl.NumberFormat("es-AR", {
@@ -80,9 +77,11 @@ const COUNTRY_LABELS: Record<string, string> = {
 export function BusinessDashboardPage({
   data,
   filters,
+  treasuryAccount,
 }: {
   data: BusinessDashboard;
   filters: DashboardFilters;
+  treasuryAccount: string;
 }) {
   const sidebar = <Sidebar company={data.company} user={data.user} />;
 
@@ -128,7 +127,11 @@ export function BusinessDashboardPage({
             tabIndex={-1}
             className="mx-auto w-full max-w-[1520px] space-y-5 px-4 py-6 outline-none sm:px-6 lg:px-8 lg:py-8"
           >
-            <Header data={data} region={filters.region} />
+            <Header
+              data={data}
+              region={filters.region}
+              treasuryAccount={treasuryAccount}
+            />
             <KpiGrid data={data} />
 
             <div className="grid gap-5 lg:grid-cols-2 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)_minmax(0,0.8fr)]">
@@ -242,9 +245,11 @@ function Sidebar({
 function Header({
   data,
   region,
+  treasuryAccount,
 }: {
   data: BusinessDashboard;
   region: DashboardFilters["region"];
+  treasuryAccount: string;
 }) {
   return (
     <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -272,12 +277,7 @@ function Header({
           {data.period.from.slice(8)}/{data.period.from.slice(5, 7)} –{" "}
           {data.period.to.slice(8)}/{data.period.to.slice(5, 7)}
         </span>
-        <Link
-          href={BUSINESS_PATH}
-          className="inline-flex min-h-10 items-center rounded-full bg-forest px-4 text-sm font-medium text-cream hover:bg-forest-soft"
-        >
-          Nuevo pago
-        </Link>
+        <NewSupplierPaymentButton treasuryAccount={treasuryAccount} />
       </div>
     </div>
   );

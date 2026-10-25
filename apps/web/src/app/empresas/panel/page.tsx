@@ -22,7 +22,14 @@ async function PanelContent({
 }) {
   const filters = parseDashboardFilters(await searchParams);
   const data = await loadBusinessDashboard(filters);
-  return <BusinessDashboardPage data={data} filters={filters} />;
+  const treasuryAccount = process.env.STELLAR_ADMIN_PUBLIC?.trim() ?? "";
+  return (
+    <BusinessDashboardPage
+      data={data}
+      filters={filters}
+      treasuryAccount={treasuryAccount}
+    />
+  );
 }
 
 export default function PanelPage({ searchParams }: Props) {
