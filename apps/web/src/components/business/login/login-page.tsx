@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 
 import { LoginForm } from "@/components/business/login/login-form";
+import { LoginGlobe } from "@/components/business/login/login-globe";
 import { BUSINESS_PATH } from "@/lib/site";
 
 const stats = [
@@ -18,10 +19,7 @@ export function BusinessLoginPage() {
           className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_30%_20%,rgba(28,92,74,0.45),transparent_60%)]"
           aria-hidden
         />
-        <div
-          className="pointer-events-none absolute inset-[18%] -z-10 rounded-full bg-[radial-gradient(circle_at_32%_28%,#3a6b5f,transparent_46%),radial-gradient(circle_at_50%_50%,#1b3d36_0%,#0b1a17_78%)] opacity-80"
-          aria-hidden
-        />
+        <LoginGlobe />
         <div
           className="pointer-events-none absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-[#061f1b] via-[#061f1b]/70 to-transparent"
           aria-hidden
