@@ -1,0 +1,32 @@
+# Rust / Soroban
+target
+.soroban
+.stellar
+
+# Node
+node_modules
+dist
+.next
+out
+coverage
+*.tsbuildinfo
+
+# Env
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea
+.vscode/*
+!.vscode/extensions.json
+
+# Logs
+*.log
+npm-debug.log*
+
+# Docker
+*.pid
