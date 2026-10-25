@@ -56,7 +56,7 @@ export function redeemSep10Challenge(input: {
     );
     const account = details.clientAccountID;
     if (account !== input.adminAccount) return null;
-    if (!clientSigned(input.transaction, details.tx, account, serverAccount, input)) return null;
+    if (!clientSigned(input.transaction, account, serverAccount, input)) return null;
     if (!input.nonces.consume(challengeNonce(details.tx), account)) return null;
     return account;
   } catch {
@@ -66,7 +66,6 @@ export function redeemSep10Challenge(input: {
 
 function clientSigned(
   transaction: string,
-  tx: Transaction,
   account: string,
   serverAccount: string,
   input: {
@@ -74,21 +73,15 @@ function clientSigned(
     homeDomain: string;
   },
 ): boolean {
-  if (account !== serverAccount) {
-    const signers = WebAuth.verifyChallengeTxSigners(
-      transaction,
-      serverAccount,
-      input.networkPassphrase,
-      [account],
-      input.homeDomain,
-      input.homeDomain,
-    );
-    return signers.includes(account);
-  }
-
-  // The SDK skips a client signer that is also the server key. Locally those
-  // accounts may be the same, so the wallet's extra signature is the proof.
-  return WebAuth.verifyTxSignedBy(tx, account) && tx.signatures.length >= 2;
+  const signers = WebAuth.verifyChallengeTxSigners(
+    transaction,
+    serverAccount,
+    input.networkPassphrase,
+    [account],
+    input.homeDomain,
+    input.homeDomain,
+  );
+  return signers.includes(account);
 }
 
 function readTransaction(xdr: string, networkPassphrase: string): Transaction {

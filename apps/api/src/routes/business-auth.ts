@@ -28,6 +28,11 @@ export function businessAuthRoutes(env: Env): FastifyPluginAsync {
       const account = publicAccount(request.body);
       if (!account) return error(reply, 400, INVALID_ACCOUNT);
       if (account !== env.STELLAR_ADMIN_PUBLIC) return error(reply, 401, UNKNOWN_ACCOUNT);
+      if (serverKeypair.publicKey() === env.STELLAR_ADMIN_PUBLIC) {
+        return reply.code(500).send({
+          error: "The SEP-10 signing account and the company account must be different.",
+        });
+      }
 
       return createSep10Challenge({
         serverKeypair,

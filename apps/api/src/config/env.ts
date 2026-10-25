@@ -51,5 +51,9 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
       .join("; ");
     throw new Error(`Invalid environment: ${details}`);
   }
+  const signingAccount = Keypair.fromSecret(parsed.data.SEP10_SIGNING_SECRET).publicKey();
+  if (signingAccount === parsed.data.STELLAR_ADMIN_PUBLIC) {
+    throw new Error("The SEP-10 signing account and the company account must be different.");
+  }
   return parsed.data;
 }

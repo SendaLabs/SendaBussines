@@ -319,34 +319,33 @@ describe("SEP-10 business session", { concurrency: false }, () => {
     }
   });
 
-  test("accepts the company wallet when it also signs the SEP-10 challenge", async () => {
+  test("loadEnv rejects a signing account that is also the company account", () => {
     const company = Keypair.random();
-    const same = await buildApp(
-      testEnv({
-        SEP10_SIGNING_SECRET: company.secret(),
-        STELLAR_ADMIN_PUBLIC: company.publicKey(),
-      }),
+    assert.throws(
+      () =>
+        testEnv({
+          SEP10_SIGNING_SECRET: company.secret(),
+          STELLAR_ADMIN_PUBLIC: company.publicKey(),
+        }),
+      /SEP-10 signing account and the company account must be different/,
     );
-    try {
-      const issued = await challengeFor(same, company.publicKey());
-      assert.equal(issued.statusCode, 200);
-      const { transaction, networkPassphrase } = issued.json() as Sep10ChallengeResponse;
-      const unsigned = await same.inject({
-        method: "POST",
-        url: API_ROUTES.sep10Token,
-        payload: { transaction },
-      });
-      assert.equal(unsigned.statusCode, 401);
+  });
 
-      const signed = await same.inject({
-        method: "POST",
-        url: API_ROUTES.sep10Token,
-        payload: { transaction: signChallenge(transaction, company, networkPassphrase) },
-      });
-      assert.equal(signed.statusCode, 204);
-      assert.match(cookieHeader(signed), /HttpOnly/);
+  test("does not issue a challenge when the signing account is the company account", async () => {
+    const matched = await buildApp({
+      ...testEnv(),
+      STELLAR_ADMIN_PUBLIC: server.publicKey(),
+    });
+    try {
+      const issued = await challengeFor(matched, server.publicKey());
+      assert.equal(issued.statusCode, 500);
+      assert.equal(issued.json().transaction, undefined);
+      assert.match(
+        String(issued.json().error),
+        /SEP-10 signing account and the company account must be different/,
+      );
     } finally {
-      await same.close();
+      await matched.close();
     }
   });
 
