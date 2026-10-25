@@ -32,29 +32,43 @@ import type { StoredSupplierPayment } from "../store/types.js";
 const SESSION_SECRET = "senda-business-session-secret-32";
 const CONTRACT_ID = StrKey.encodeContract(Buffer.alloc(32, 4));
 const FUND_HASH = "fund-tx-test";
+const UNCERTAIN_DEPLOY_HASH = "deploy-uncertain";
+const UNCERTAIN_FUND_HASH = "fund-uncertain";
 const SUPPLIER_NAME = "Taller Norte";
 
 class FakeEscrow implements EscrowFundClient {
   readonly deploys: DeployEscrowInput[] = [];
   readonly funds: FundEscrowInput[] = [];
+  readonly deployReads: string[] = [];
+  readonly fundReads: string[] = [];
   deployError: Error | null = null;
   fundError: Error | null = null;
   contractId: string | null = CONTRACT_ID;
   funded = true;
+  deployLagging = false;
+  fundLagging = false;
+  settledContractId: string | null = null;
+  deployTxFailed = false;
+  fundSettlement: "pending" | "confirmed" | "failed" = "pending";
+  deployGate: Promise<void> | null = null;
+  onDeployEntered: (() => void) | null = null;
 
   async deploy(input: DeployEscrowInput): Promise<EscrowRecord> {
     this.deploys.push({ ...input });
+    this.onDeployEntered?.();
+    if (this.deployGate) await this.deployGate;
     if (this.deployError) throw this.deployError;
+    const lagging = this.deployLagging;
     return {
       engagementId: input.engagementId,
-      contractId: this.contractId,
-      txHash: "deploy-tx",
+      contractId: lagging ? null : this.contractId,
+      txHash: lagging ? UNCERTAIN_DEPLOY_HASH : "deploy-tx",
       fundTxHash: null,
       releaseTxHash: null,
       amount: input.amount,
       funded: false,
       released: false,
-      indexerLagging: false,
+      indexerLagging: lagging,
     };
   }
 
@@ -65,6 +79,19 @@ class FakeEscrow implements EscrowFundClient {
   async fund(input: FundEscrowInput): Promise<EscrowRecord> {
     this.funds.push({ ...input });
     if (this.fundError) throw this.fundError;
+    if (this.fundLagging) {
+      return {
+        engagementId: input.engagementId,
+        contractId: input.contractId,
+        txHash: UNCERTAIN_FUND_HASH,
+        fundTxHash: null,
+        releaseTxHash: null,
+        amount: input.amount,
+        funded: false,
+        released: false,
+        indexerLagging: true,
+      };
+    }
     return {
       engagementId: input.engagementId,
       contractId: input.contractId,
@@ -75,6 +102,40 @@ class FakeEscrow implements EscrowFundClient {
       funded: this.funded,
       released: false,
       indexerLagging: false,
+    };
+  }
+
+  async readDeploy(txHash: string): Promise<EscrowRecord> {
+    this.deployReads.push(txHash);
+    const failed = this.deployTxFailed;
+    const contractId = failed ? null : this.settledContractId;
+    return {
+      engagementId: "",
+      contractId,
+      txHash,
+      fundTxHash: null,
+      releaseTxHash: null,
+      amount: null,
+      funded: false,
+      released: false,
+      indexerLagging: !failed && contractId == null,
+    };
+  }
+
+  async readFund(txHash: string): Promise<EscrowRecord> {
+    this.fundReads.push(txHash);
+    const confirmed = this.fundSettlement === "confirmed";
+    const failed = this.fundSettlement === "failed";
+    return {
+      engagementId: "",
+      contractId: confirmed ? this.contractId : null,
+      txHash,
+      fundTxHash: confirmed ? txHash : null,
+      releaseTxHash: null,
+      amount: null,
+      funded: confirmed,
+      released: false,
+      indexerLagging: !confirmed && !failed,
     };
   }
 }
@@ -117,6 +178,9 @@ function pendingRow(
     fundTxHash: null,
     releaseTxHash: null,
     fundedAt: null,
+    fundingClaimedAt: null,
+    deployTxHash: null,
+    pendingFundTxHash: null,
     ...patch,
   };
 }
@@ -504,6 +568,7 @@ test("a later call funds the saved contract and does not deploy again", async ()
     assert.equal(escrow.funds.length, 2);
     assert.equal(escrow.funds[1]?.contractId, CONTRACT_ID);
     assert.equal(escrow.funds[1]?.engagementId, created.id);
+    assert.equal(escrow.deployReads.length, 0);
 
     const stored = store.readSupplierPayment(created.id);
     assert.equal(stored?.status, "approved");
@@ -514,6 +579,159 @@ test("a later call funds the saved contract and does not deploy again", async ()
     assert.equal(listed?.fundedTxHash, FUND_HASH);
     assert.equal(dashboard.kpis.balance.value, 248420);
     assert.deepEqual(dashboard.kpis.payable, { value: 10425, invoices: 6 });
+  });
+});
+
+test("two overlapping fund calls deploy and fund once", { timeout: 5_000 }, async () => {
+  await withFundApi(async ({ app, supplier, token, escrow, store }) => {
+    const created = await createPending(app, token, supplier, 100);
+    let releaseDeploy: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      releaseDeploy = resolve;
+    });
+    let entered: () => void = () => undefined;
+    const enteredPromise = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    escrow.deployGate = gate;
+    escrow.onDeployEntered = () => entered();
+
+    const firstPromise = fundPayment(app, created.id, token, { supplierName: SUPPLIER_NAME });
+    await enteredPromise;
+    const held = store.readSupplierPayment(created.id);
+    assert.equal(held?.status, "pending");
+    assert.equal(held?.escrowContractId, null);
+    assert.notEqual(held?.fundingClaimedAt, null);
+    assert.equal(escrow.deploys.length, 1);
+    assert.equal(escrow.funds.length, 0);
+
+    const second = await fundPayment(app, created.id, token, {
+      supplierName: SUPPLIER_NAME,
+      country: "Paraguay",
+    });
+    assert.equal(second.statusCode, 409);
+    assert.deepEqual(second.json(), { error: "Ese pago ya se está depositando." });
+    assert.equal(escrow.deploys.length, 1);
+    assert.equal(escrow.funds.length, 0);
+    const deploy = escrow.deploys[0];
+    assert.ok(deploy);
+    assertDeployOmitsSupplier(deploy, created.id, 100);
+
+    releaseDeploy();
+    const first = await firstPromise;
+    assert.equal(first.statusCode, 200);
+    assert.deepEqual(first.json(), {
+      id: created.id,
+      status: "approved",
+      escrowContractId: CONTRACT_ID,
+      fundTxHash: FUND_HASH,
+    });
+    assert.equal(escrow.deploys.length, 1);
+    assert.equal(escrow.funds.length, 1);
+    assert.equal(escrow.funds[0]?.contractId, CONTRACT_ID);
+    const stored = store.readSupplierPayment(created.id);
+    assert.equal(stored?.status, "approved");
+    assert.equal(stored?.escrowContractId, CONTRACT_ID);
+    assert.equal(stored?.fundTxHash, FUND_HASH);
+    assert.equal(stored?.fundingClaimedAt, null);
+    assert.equal(stored?.deployTxHash, null);
+    assert.equal(stored?.pendingFundTxHash, null);
+  });
+});
+
+test("a retry after an uncertain deploy does not deploy again", async () => {
+  await withFundApi(async ({ app, supplier, token, escrow, store }) => {
+    escrow.deployLagging = true;
+    const created = await createPending(app, token, supplier, 100);
+    const first = await fundPayment(app, created.id, token, {
+      supplierName: SUPPLIER_NAME,
+      country: "Paraguay",
+    });
+    assert.equal(first.statusCode, 502);
+    assert.deepEqual(first.json(), { error: DEPLOY_FAILED });
+    assert.equal(escrow.deploys.length, 1);
+    assert.equal(escrow.funds.length, 0);
+    const deploy = escrow.deploys[0];
+    assert.ok(deploy);
+    assertDeployOmitsSupplier(deploy, created.id, 100);
+    const uncertain = store.readSupplierPayment(created.id);
+    assert.equal(uncertain?.status, "pending");
+    assert.equal(uncertain?.escrowContractId, null);
+    assert.equal(uncertain?.deployTxHash, UNCERTAIN_DEPLOY_HASH);
+    assert.equal(uncertain?.fundTxHash, null);
+    assert.equal(uncertain?.fundingClaimedAt, null);
+
+    const second = await fundPayment(app, created.id, token);
+    assert.equal(second.statusCode, 502);
+    assert.deepEqual(second.json(), { error: DEPLOY_FAILED });
+    assert.equal(escrow.deploys.length, 1);
+    assert.equal(escrow.funds.length, 0);
+    assert.deepEqual(escrow.deployReads, [UNCERTAIN_DEPLOY_HASH]);
+    assert.equal(store.readSupplierPayment(created.id)?.escrowContractId, null);
+    assert.equal(store.readSupplierPayment(created.id)?.deployTxHash, UNCERTAIN_DEPLOY_HASH);
+
+    escrow.settledContractId = CONTRACT_ID;
+    const third = await fundPayment(app, created.id, token);
+    assert.equal(third.statusCode, 200);
+    assert.deepEqual(third.json(), {
+      id: created.id,
+      status: "approved",
+      escrowContractId: CONTRACT_ID,
+      fundTxHash: FUND_HASH,
+    });
+    assert.equal(escrow.deploys.length, 1);
+    assert.equal(escrow.funds.length, 1);
+    assert.equal(escrow.funds[0]?.contractId, CONTRACT_ID);
+    assert.equal(escrow.deployReads.length, 2);
+    const stored = store.readSupplierPayment(created.id);
+    assert.equal(stored?.status, "approved");
+    assert.equal(stored?.escrowContractId, CONTRACT_ID);
+    assert.equal(stored?.fundTxHash, FUND_HASH);
+    assert.equal(stored?.deployTxHash, null);
+  });
+});
+
+test("a retry after an uncertain fund does not fund again", async () => {
+  await withFundApi(async ({ app, supplier, token, escrow, store }) => {
+    escrow.fundLagging = true;
+    const created = await createPending(app, token, supplier, 100);
+    const first = await fundPayment(app, created.id, token);
+    assert.equal(first.statusCode, 502);
+    assert.deepEqual(first.json(), { error: FUND_FAILED });
+    assert.equal(escrow.deploys.length, 1);
+    assert.equal(escrow.funds.length, 1);
+    const uncertain = store.readSupplierPayment(created.id);
+    assert.equal(uncertain?.status, "pending");
+    assert.equal(uncertain?.escrowContractId, CONTRACT_ID);
+    assert.equal(uncertain?.fundTxHash, null);
+    assert.equal(uncertain?.pendingFundTxHash, UNCERTAIN_FUND_HASH);
+    assert.equal(uncertain?.fundingClaimedAt, null);
+
+    const second = await fundPayment(app, created.id, token);
+    assert.equal(second.statusCode, 502);
+    assert.equal(escrow.deploys.length, 1);
+    assert.equal(escrow.funds.length, 1);
+    assert.deepEqual(escrow.fundReads, [UNCERTAIN_FUND_HASH]);
+    assert.equal(store.readSupplierPayment(created.id)?.status, "pending");
+    assert.equal(store.readSupplierPayment(created.id)?.pendingFundTxHash, UNCERTAIN_FUND_HASH);
+
+    escrow.fundSettlement = "confirmed";
+    const third = await fundPayment(app, created.id, token);
+    assert.equal(third.statusCode, 200);
+    assert.deepEqual(third.json(), {
+      id: created.id,
+      status: "approved",
+      escrowContractId: CONTRACT_ID,
+      fundTxHash: UNCERTAIN_FUND_HASH,
+    });
+    assert.equal(escrow.deploys.length, 1);
+    assert.equal(escrow.funds.length, 1);
+    assert.equal(escrow.fundReads.length, 2);
+    const stored = store.readSupplierPayment(created.id);
+    assert.equal(stored?.status, "approved");
+    assert.equal(stored?.fundTxHash, UNCERTAIN_FUND_HASH);
+    assert.equal(stored?.pendingFundTxHash, null);
+    assert.equal(stored?.escrowContractId, CONTRACT_ID);
   });
 });
 

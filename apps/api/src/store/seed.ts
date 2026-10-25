@@ -11,6 +11,9 @@ function unfunded(
     fundTxHash: null,
     releaseTxHash: null,
     fundedAt: null,
+    fundingClaimedAt: null,
+    deployTxHash: null,
+    pendingFundTxHash: null,
   };
 }
 

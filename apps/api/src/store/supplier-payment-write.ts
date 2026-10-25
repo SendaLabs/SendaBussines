@@ -32,6 +32,9 @@ export function supplierPaymentWrite(
     fundTxHash: null,
     releaseTxHash: null,
     fundedAt: null,
+    fundingClaimedAt: null,
+    deployTxHash: null,
+    pendingFundTxHash: null,
   };
   const activity: BusinessActivity = {
     id: activityId,

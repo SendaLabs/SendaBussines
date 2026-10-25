@@ -24,6 +24,82 @@ function copyPayment(payment: StoredSupplierPayment): StoredSupplierPayment {
   return { ...payment };
 }
 
+/**
+ * Check-and-set with no await between the read and the write, so two
+ * overlapping calls in this process cannot both hold the payment.
+ */
+function claimFunding(state: CompanyBook, id: string): StoredSupplierPayment | null {
+  const payment = state.payments.find((item) => item.id === id);
+  if (!payment || payment.status !== "pending" || payment.fundingClaimedAt != null) {
+    return null;
+  }
+  payment.fundingClaimedAt = new Date().toISOString();
+  return copyPayment(payment);
+}
+
+function releaseFunding(state: CompanyBook, id: string): void {
+  const payment = state.payments.find((item) => item.id === id);
+  if (!payment || payment.status !== "pending" || payment.fundingClaimedAt == null) return;
+  payment.fundingClaimedAt = null;
+}
+
+function heldPayment(state: CompanyBook, id: string): StoredSupplierPayment | null {
+  const payment = state.payments.find((item) => item.id === id);
+  if (!payment || payment.status !== "pending" || payment.fundingClaimedAt == null) return null;
+  return payment;
+}
+
+/** Writes the contract id only while it is still null. Synchronous check-and-set. */
+function persistDeployedEscrow(state: CompanyBook, id: string, escrowContractId: string): boolean {
+  const payment = heldPayment(state, id);
+  if (!payment) return false;
+  if (payment.escrowContractId === escrowContractId) {
+    payment.deployTxHash = null;
+    return true;
+  }
+  if (payment.escrowContractId != null) return false;
+  payment.escrowContractId = escrowContractId;
+  payment.deployTxHash = null;
+  return true;
+}
+
+function persistPendingHash(
+  state: CompanyBook,
+  id: string,
+  kind: "deploy" | "fund",
+  txHash: string,
+): boolean {
+  const payment = heldPayment(state, id);
+  if (!payment) return false;
+  if (kind === "deploy") {
+    if (payment.escrowContractId != null) return false;
+    if (payment.deployTxHash === txHash) return true;
+    if (payment.deployTxHash != null) return false;
+    payment.deployTxHash = txHash;
+    return true;
+  }
+  if (payment.escrowContractId == null) return false;
+  if (payment.pendingFundTxHash === txHash) return true;
+  if (payment.pendingFundTxHash != null) return false;
+  payment.pendingFundTxHash = txHash;
+  return true;
+}
+
+function clearPendingHash(
+  state: CompanyBook,
+  id: string,
+  kind: "deploy" | "fund",
+  txHash: string,
+): void {
+  const payment = heldPayment(state, id);
+  if (!payment) return;
+  if (kind === "deploy") {
+    if (payment.deployTxHash === txHash) payment.deployTxHash = null;
+    return;
+  }
+  if (payment.pendingFundTxHash === txHash) payment.pendingFundTxHash = null;
+}
+
 function nonceRecordIsFree(nonces: Map<string, Sep10Nonce>, nonce: string, now: Date): boolean {
   const record = nonces.get(nonce);
   if (!record || record.usedAt !== null) return false;
@@ -79,22 +155,41 @@ export function createMemoryBusinessStore(book: CompanyBook = DEMO_BOOK): Memory
       if (!payment) throw new Error("No se pudo guardar el pago.");
       payment.metadataSha256 = metadataSha256;
     },
-    async saveDeployedEscrow(id, escrowContractId) {
-      const payment = state.payments.find((item) => item.id === id);
-      if (!payment || payment.status !== "pending") {
-        throw new Error("No se pudo guardar el depósito.");
-      }
-      payment.escrowContractId = escrowContractId;
+    claimSupplierFunding(id) {
+      return Promise.resolve(claimFunding(state, id));
+    },
+    releaseSupplierFunding(id) {
+      releaseFunding(state, id);
+      return Promise.resolve();
+    },
+    saveDeployedEscrow(id, escrowContractId) {
+      return Promise.resolve(persistDeployedEscrow(state, id, escrowContractId));
+    },
+    savePendingDeployTx(id, txHash) {
+      return Promise.resolve(persistPendingHash(state, id, "deploy", txHash));
+    },
+    clearPendingDeployTx(id, txHash) {
+      clearPendingHash(state, id, "deploy", txHash);
+      return Promise.resolve();
+    },
+    savePendingFundTx(id, txHash) {
+      return Promise.resolve(persistPendingHash(state, id, "fund", txHash));
+    },
+    clearPendingFundTx(id, txHash) {
+      clearPendingHash(state, id, "fund", txHash);
+      return Promise.resolve();
     },
     async markSupplierFunded(id, funded: FundedSupplierPayment) {
-      const payment = state.payments.find((item) => item.id === id);
-      if (!payment || payment.status !== "pending") {
+      const payment = heldPayment(state, id);
+      if (!payment || payment.escrowContractId !== funded.escrowContractId) {
         throw new Error("No se pudo registrar el fondeo.");
       }
       payment.status = "approved";
-      payment.escrowContractId = funded.escrowContractId;
       payment.fundTxHash = funded.fundTxHash;
       payment.fundedAt = funded.fundedAt;
+      payment.fundingClaimedAt = null;
+      payment.deployTxHash = null;
+      payment.pendingFundTxHash = null;
     },
     async markSupplierReleased(id, released: ReleasedSupplierPayment) {
       const payment = state.payments.find((item) => item.id === id);

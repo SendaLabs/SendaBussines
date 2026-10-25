@@ -186,24 +186,41 @@ export class TrustlessWorkClient {
    * Does not call deploy again.
    */
   async readDeployByTxHash(txHash: string): Promise<string | null> {
-    let response: Response;
-    try {
-      response = await this.fetchImpl(this.sorobanRpcUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          jsonrpc: "2.0",
-          id: 1,
-          method: "getTransaction",
-          params: { hash: txHash },
-        }),
+    const observed = await this.observeTransaction(txHash);
+    return observed.kind === "success" ? observed.contractId : null;
+  }
+
+  /** Re-reads a deploy transaction. Does not submit another deploy. */
+  async readDeploy(txHash: string): Promise<EscrowRecord> {
+    const observed = await this.observeTransaction(txHash);
+    if (observed.kind === "success" && observed.contractId) {
+      return observedRecord(txHash, {
+        contractId: observed.contractId,
+        funded: false,
+        indexerLagging: false,
       });
-    } catch {
-      return null;
     }
-    if (!response.ok) return null;
-    const payload = await readJson(response);
-    return contractIdFromRpc(payload);
+    if (observed.kind === "failed") {
+      return observedRecord(txHash, { contractId: null, funded: false, indexerLagging: false });
+    }
+    return observedRecord(txHash, { contractId: null, funded: false, indexerLagging: true });
+  }
+
+  /** Re-reads a fund transaction. Does not submit another fund. */
+  async readFund(txHash: string): Promise<EscrowRecord> {
+    const observed = await this.observeTransaction(txHash);
+    if (observed.kind === "success") {
+      return observedRecord(txHash, {
+        contractId: observed.contractId,
+        fundTxHash: txHash,
+        funded: true,
+        indexerLagging: false,
+      });
+    }
+    if (observed.kind === "failed") {
+      return observedRecord(txHash, { contractId: null, funded: false, indexerLagging: false });
+    }
+    return observedRecord(txHash, { contractId: null, funded: false, indexerLagging: true });
   }
 
   private assertTreasury(): void {
@@ -346,6 +363,17 @@ export class TrustlessWorkClient {
   }
 
   private async readTransactionStatus(txHash: string): Promise<string | null> {
+    const observed = await this.observeTransaction(txHash);
+    if (observed.kind === "success") return "SUCCESS";
+    if (observed.kind === "failed") return "FAILED";
+    return null;
+  }
+
+  private async observeTransaction(txHash: string): Promise<
+    | { kind: "success"; contractId: string | null }
+    | { kind: "failed" }
+    | { kind: "pending" }
+  > {
     let response: Response;
     try {
       response = await this.fetchImpl(this.sorobanRpcUrl, {
@@ -359,15 +387,14 @@ export class TrustlessWorkClient {
         }),
       });
     } catch {
-      return null;
+      return { kind: "pending" };
     }
-    if (!response.ok) return null;
+    if (!response.ok) return { kind: "pending" };
     const payload = await readJson(response);
-    if (!payload || typeof payload !== "object") return null;
-    const result = (payload as { result?: unknown }).result;
-    if (!result || typeof result !== "object") return null;
-    const status = (result as { status?: unknown }).status;
-    return typeof status === "string" ? status : null;
+    const status = rpcStatus(payload);
+    if (status === "FAILED") return { kind: "failed" };
+    if (status !== "SUCCESS") return { kind: "pending" };
+    return { kind: "success", contractId: contractIdFromRpc(payload) };
   }
 
   private async postTrustless(
@@ -500,6 +527,36 @@ function assertEngagementId(engagementId: string): void {
   if (typeof engagementId !== "string" || engagementId.trim() === "") {
     throw new EscrowClientError(400, "El pago no tiene un identificador.");
   }
+}
+
+function observedRecord(
+  txHash: string,
+  patch: {
+    contractId: string | null;
+    funded: boolean;
+    indexerLagging: boolean;
+    fundTxHash?: string | null;
+  },
+): EscrowRecord {
+  return {
+    engagementId: "",
+    contractId: patch.contractId,
+    txHash,
+    fundTxHash: patch.fundTxHash ?? null,
+    releaseTxHash: null,
+    amount: null,
+    funded: patch.funded,
+    released: false,
+    indexerLagging: patch.indexerLagging,
+  };
+}
+
+function rpcStatus(payload: unknown): string | null {
+  if (!payload || typeof payload !== "object") return null;
+  const result = (payload as { result?: unknown }).result;
+  if (!result || typeof result !== "object") return null;
+  const status = (result as { status?: unknown }).status;
+  return typeof status === "string" ? status : null;
 }
 
 function unsaved(engagementId: string, txHash: string): EscrowRecord {

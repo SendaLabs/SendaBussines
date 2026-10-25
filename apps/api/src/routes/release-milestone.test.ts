@@ -93,6 +93,9 @@ function approvedRow(
     fundTxHash: "fund-tx-test",
     releaseTxHash: null,
     fundedAt: "2026-10-25T12:00:00.000Z",
+    fundingClaimedAt: null,
+    deployTxHash: null,
+    pendingFundTxHash: null,
     ...patch,
   };
 }
