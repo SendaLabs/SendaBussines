@@ -14,6 +14,9 @@ const envSchema = z.object({
     .string()
     .url()
     .default("https://soroban-testnet.stellar.org"),
+  SUPABASE_URL: z.string().url(),
+  SUPABASE_SECRET_KEY: z.string().min(1),
+  SESSION_SECRET: z.string().min(32),
 });
 
 export type Env = z.infer<typeof envSchema>;

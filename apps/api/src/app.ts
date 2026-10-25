@@ -2,14 +2,17 @@ import Fastify from "fastify";
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
 import type { Env } from "./config/env.js";
+import { businessRoutes } from "./routes/business.js";
 import { healthRoutes } from "./routes/health.js";
 import { stellarRoutes } from "./routes/stellar.js";
+import type { BusinessStore } from "./store/types.js";
 
-export async function buildApp(env: Env) {
+export async function buildApp(env: Env, store: BusinessStore) {
   const app = Fastify({
-    logger: {
-      level: env.NODE_ENV === "production" ? "info" : "debug",
-    },
+    logger:
+      env.NODE_ENV === "test"
+        ? false
+        : { level: env.NODE_ENV === "production" ? "info" : "debug" },
   });
 
   await app.register(helmet);
@@ -19,6 +22,7 @@ export async function buildApp(env: Env) {
 
   await app.register(healthRoutes);
   await app.register(stellarRoutes(env));
+  await app.register(businessRoutes(env, store));
 
   return app;
 }
