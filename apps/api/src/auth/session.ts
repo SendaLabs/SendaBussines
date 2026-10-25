@@ -1,12 +1,15 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { SESSION_COOKIE } from "@senda/shared";
 
-/** Cookie set once SEP-10 accepts the company wallet. This branch only signs and reads it. */
-export const SESSION_COOKIE_NAME = "senda_session";
+/** Cookie set once SEP-10 accepts the company wallet. Payload is account and exp, HMAC-SHA256. */
+export const SESSION_COOKIE_NAME = SESSION_COOKIE;
 
 export const SIGN_IN_REQUIRED_ERROR = "Tenés que ingresar.";
 
 /** Seven days. The signed expiry and the cookie lifetime use the same span. */
 export const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+export const SESSION_TTL_SECONDS = SESSION_TTL_MS / 1000;
 
 const MIN_SECRET_LENGTH = 32;
 
@@ -90,10 +93,38 @@ export function readCookie(header: string | undefined, name: string): string | u
   return undefined;
 }
 
+export function readRequestCookie(
+  header: string | string[] | undefined,
+  name: string,
+): string | undefined {
+  const raw = Array.isArray(header) ? header.join(";") : header;
+  return readCookie(raw, name);
+}
+
 export function sessionFromCookieHeader(
-  header: string | undefined,
+  header: string | string[] | undefined,
   secret: string,
   now = Date.now(),
 ): { account: string } | null {
-  return verifySession(readCookie(header, SESSION_COOKIE_NAME), secret, now);
+  return verifySession(readRequestCookie(header, SESSION_COOKIE_NAME), secret, now);
+}
+
+export function sessionCookieHeader(token: string, secure: boolean): string {
+  return serialize(SESSION_COOKIE_NAME, token, SESSION_TTL_SECONDS, secure);
+}
+
+export function clearSessionCookieHeader(secure: boolean): string {
+  return serialize(SESSION_COOKIE_NAME, "", 0, secure);
+}
+
+function serialize(name: string, value: string, maxAge: number, secure: boolean): string {
+  const parts = [
+    `${name}=${value}`,
+    "HttpOnly",
+    "Path=/",
+    "SameSite=Lax",
+    `Max-Age=${maxAge}`,
+  ];
+  if (secure) parts.push("Secure");
+  return parts.join("; ");
 }

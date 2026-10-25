@@ -5,6 +5,7 @@ import type { Env } from "./config/env.js";
 import { createTrustlessWorkClientFromEnv } from "./escrow/client.js";
 import type { EscrowFundClient } from "./escrow/fund-supplier-payment.js";
 import type { EscrowReleaseClient } from "./escrow/release-supplier-payment.js";
+import { businessAuthRoutes } from "./routes/business-auth.js";
 import { businessRoutes } from "./routes/business.js";
 import { healthRoutes } from "./routes/health.js";
 import { stellarRoutes } from "./routes/stellar.js";
@@ -25,10 +26,12 @@ export async function buildApp(
   await app.register(helmet);
   await app.register(cors, {
     origin: env.CORS_ORIGIN.split(",").map((value) => value.trim()),
+    credentials: true,
   });
 
   await app.register(healthRoutes);
   await app.register(stellarRoutes(env));
+  await app.register(businessAuthRoutes(env));
   await app.register(businessRoutes(env, store, escrow));
 
   return app;

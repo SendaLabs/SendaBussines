@@ -107,7 +107,21 @@ export const API_ROUTES = {
   network: "/stellar/network",
   businessDashboard: "/business/dashboard",
   businessSupplierPayments: "/business/supplier-payments",
+  sep10Challenge: "/business/sep10/challenge",
+  sep10Token: "/business/sep10/token",
+  businessSession: "/business/session",
 } as const;
+
+export const SESSION_COOKIE = "senda_session";
+
+export interface Sep10ChallengeResponse {
+  transaction: string;
+  networkPassphrase: string;
+}
+
+export interface BusinessSessionResponse {
+  account: string;
+}
 
 export function supplierPaymentFundEscrowPath(paymentId: string): string {
   return `${API_ROUTES.businessSupplierPayments}/${encodeURIComponent(paymentId)}/fund-escrow`;

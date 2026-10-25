@@ -2,7 +2,7 @@ import "server-only";
 
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { API_ROUTES, type BusinessDashboard } from "@senda/shared";
+import { API_ROUTES, SESSION_COOKIE, type BusinessDashboard } from "@senda/shared";
 
 import {
   FILTER_PARAMS,
@@ -10,7 +10,6 @@ import {
 } from "@/components/business/dashboard/filters";
 import { BUSINESS_LOGIN_PATH } from "@/lib/site";
 
-const SESSION_COOKIE = "senda_session";
 const DEFAULT_API_URL = "http://127.0.0.1:4000";
 
 function apiOrigin(): string {

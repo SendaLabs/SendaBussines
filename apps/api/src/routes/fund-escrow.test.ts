@@ -79,6 +79,8 @@ class FakeEscrow implements EscrowFundClient {
   }
 }
 
+const SEP10_SIGNING_SECRET = Keypair.random().secret();
+
 function testEnv(adminPublic: string) {
   return loadEnv({
     NODE_ENV: "test",
@@ -86,6 +88,7 @@ function testEnv(adminPublic: string) {
     SUPABASE_SECRET_KEY: "test-only-not-a-real-key",
     SESSION_SECRET,
     STELLAR_ADMIN_PUBLIC: adminPublic,
+    SEP10_SIGNING_SECRET,
   });
 }
 

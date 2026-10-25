@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { BusinessDashboardPage } from "@/components/business/dashboard/dashboard-page";
 import { parseDashboardFilters } from "@/components/business/dashboard/filters";
 import { loadBusinessDashboard } from "@/lib/business-dashboard";
+import { requireBusinessSession } from "@/lib/session";
 
 export const metadata: Metadata = {
   title: "Panel",
@@ -20,6 +21,7 @@ async function PanelContent({
 }: {
   searchParams: Props["searchParams"];
 }) {
+  await requireBusinessSession();
   const filters = parseDashboardFilters(await searchParams);
   const data = await loadBusinessDashboard(filters);
   const treasuryAccount = process.env.STELLAR_ADMIN_PUBLIC?.trim() ?? "";

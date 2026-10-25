@@ -4,6 +4,7 @@ import { Keypair } from "@stellar/stellar-sdk";
 import { loadEnv } from "./env.js";
 
 const SESSION_SECRET = "senda-business-session-secret-32";
+const signing = Keypair.random();
 const ADMIN_ACCOUNT = Keypair.random().publicKey();
 
 const bookEnv = {
@@ -12,6 +13,7 @@ const bookEnv = {
   SUPABASE_SECRET_KEY: "test-only-not-a-real-key",
   SESSION_SECRET,
   STELLAR_ADMIN_PUBLIC: ADMIN_ACCOUNT,
+  SEP10_SIGNING_SECRET: signing.secret(),
 };
 
 test("loadEnv requires the Supabase book, the session secret, and the company account", () => {

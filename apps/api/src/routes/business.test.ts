@@ -21,6 +21,7 @@ import { createMemoryBusinessStore } from "../store/memory.js";
 import { paymentMetadataSha256 } from "../store/payment-metadata.js";
 
 const SESSION_SECRET = "senda-business-session-secret-32";
+const SEP10_SIGNING_SECRET = Keypair.random().secret();
 
 function testEnv(adminPublic: string) {
   return loadEnv({
@@ -29,6 +30,7 @@ function testEnv(adminPublic: string) {
     SUPABASE_SECRET_KEY: "test-only-not-a-real-key",
     SESSION_SECRET,
     STELLAR_ADMIN_PUBLIC: adminPublic,
+    SEP10_SIGNING_SECRET,
   });
 }
 
