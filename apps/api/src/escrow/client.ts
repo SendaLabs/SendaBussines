@@ -48,6 +48,11 @@ export type FundEscrowInput = {
 export type ReleaseEscrowInput = {
   engagementId: string;
   contractId: string;
+  /**
+   * Numeric indexes, matching the v2 example. This escrow has one milestone.
+   * Omitted callers still release milestone 0. Strings are rejected.
+   */
+  milestoneIndexes?: readonly [0];
 };
 
 export type EscrowRecord = {
@@ -153,7 +158,7 @@ export class TrustlessWorkClient {
     const prepared = await this.build(PATHS.approveAndRelease, {
       contractId: input.contractId,
       signer: this.adminPublicKey,
-      milestoneIndexes: [0],
+      milestoneIndexes: releaseMilestoneIndexes(input.milestoneIndexes),
     }, RELEASE_FAILED);
 
     const submitted = await this.submit(prepared.unsignedXdr, RELEASE_FAILED);
@@ -455,6 +460,15 @@ function deployBody(
       },
     ],
   };
+}
+
+/** v2 examples send numbers. A string index is a different JSON value and is not sent. */
+function releaseMilestoneIndexes(indexes: readonly [0] | undefined): readonly [0] {
+  const index: unknown = indexes === undefined ? 0 : indexes[0];
+  if (typeof index !== "number" || index !== 0) {
+    throw new EscrowClientError(502, RELEASE_FAILED);
+  }
+  return [0];
 }
 
 function assertAmount(amount: number): number {

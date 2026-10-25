@@ -3,7 +3,12 @@ import type { Env } from "../config/env.js";
 import { buildDashboard } from "../dashboard/project.js";
 import { supplierPaymentWrite } from "./supplier-payment-write.js";
 import { companyBookFromRow, storedPaymentFromRow } from "./supabase-map.js";
-import type { BusinessStore, FundedSupplierPayment, NewSupplierPayment } from "./types.js";
+import type {
+  BusinessStore,
+  FundedSupplierPayment,
+  NewSupplierPayment,
+  ReleasedSupplierPayment,
+} from "./types.js";
 
 const COMPANY_COLUMNS = `
   name,
@@ -151,6 +156,22 @@ export function createSupabaseBusinessStore(
         .select("id");
       if (error || !Array.isArray(data) || data.length !== 1) {
         throw new Error("No se pudo registrar el fondeo.", { cause: error?.code });
+      }
+    },
+    async markSupplierReleased(id, released: ReleasedSupplierPayment) {
+      const { data, error } = await client
+        .from("supplier_payments")
+        .update({
+          status: "released",
+          release_tx_hash: released.releaseTxHash,
+        })
+        .eq("id", id)
+        .eq("status", "approved")
+        .not("escrow_contract_id", "is", null)
+        .is("release_tx_hash", null)
+        .select("id");
+      if (error || !Array.isArray(data) || data.length !== 1) {
+        throw new Error("No se pudo registrar la liberación.", { cause: error?.code });
       }
     },
   };

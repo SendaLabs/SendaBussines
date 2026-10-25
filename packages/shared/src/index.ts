@@ -24,7 +24,7 @@ export type BusinessRange = (typeof BUSINESS_RANGES)[number];
 export const BUSINESS_CATEGORY_PERIODS = ["current", "previous"] as const;
 export type BusinessCategoryPeriod = (typeof BUSINESS_CATEGORY_PERIODS)[number];
 
-export const BUSINESS_PAYMENT_STATUSES = ["pending", "scheduled", "approved"] as const;
+export const BUSINESS_PAYMENT_STATUSES = ["pending", "scheduled", "approved", "released"] as const;
 export type BusinessPaymentStatus = (typeof BUSINESS_PAYMENT_STATUSES)[number];
 
 export const BUSINESS_ACTIVITY_KINDS = [
@@ -60,6 +60,8 @@ export interface BusinessUpcomingPayment {
   status: BusinessPaymentStatus;
   stellarAccount: string | null;
   fundedTxHash: string | null;
+  escrowContractId: string | null;
+  releaseTxHash: string | null;
 }
 
 export interface BusinessActivity {
@@ -111,6 +113,10 @@ export function supplierPaymentFundEscrowPath(paymentId: string): string {
   return `${API_ROUTES.businessSupplierPayments}/${encodeURIComponent(paymentId)}/fund-escrow`;
 }
 
+export function supplierPaymentReleaseMilestonePath(paymentId: string): string {
+  return `${API_ROUTES.businessSupplierPayments}/${encodeURIComponent(paymentId)}/release-milestone`;
+}
+
 /** Pending rows with a Stellar account. Seed payments have no account, so they stay out. */
 export function supplierPaymentCanBeFunded(
   payment: Pick<BusinessUpcomingPayment, "status" | "stellarAccount">,
@@ -119,6 +125,18 @@ export function supplierPaymentCanBeFunded(
     payment.status === "pending" &&
     typeof payment.stellarAccount === "string" &&
     payment.stellarAccount.trim().length > 0
+  );
+}
+
+/** Approved rows with a funded escrow and no release hash. The treasury signs server-side. */
+export function supplierPaymentCanBeReleased(
+  payment: Pick<BusinessUpcomingPayment, "status" | "escrowContractId" | "releaseTxHash">,
+): boolean {
+  return (
+    payment.status === "approved" &&
+    typeof payment.escrowContractId === "string" &&
+    payment.escrowContractId.trim().length > 0 &&
+    (payment.releaseTxHash == null || payment.releaseTxHash.trim().length === 0)
   );
 }
 

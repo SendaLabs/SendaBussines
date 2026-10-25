@@ -58,6 +58,10 @@ class FakeEscrow implements EscrowFundClient {
     };
   }
 
+  async approveAndRelease(): Promise<EscrowRecord> {
+    throw new Error("fund tests do not release");
+  }
+
   async fund(input: FundEscrowInput): Promise<EscrowRecord> {
     this.funds.push({ ...input });
     if (this.fundError) throw this.fundError;

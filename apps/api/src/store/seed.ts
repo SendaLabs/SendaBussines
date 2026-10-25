@@ -1,7 +1,9 @@
 import type { BusinessUpcomingPayment } from "@senda/shared";
 import type { CompanyBook, StoredSupplierPayment } from "./types.js";
 
-function unfunded(payment: BusinessUpcomingPayment): StoredSupplierPayment {
+function unfunded(
+  payment: Omit<BusinessUpcomingPayment, "escrowContractId" | "releaseTxHash">,
+): StoredSupplierPayment {
   return {
     ...payment,
     metadataSha256: null,

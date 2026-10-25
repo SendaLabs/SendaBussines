@@ -4,14 +4,18 @@ import { API_ROUTES, parseSupplierPayment, type ApiErrorBody } from "@senda/shar
 import { SIGN_IN_REQUIRED_ERROR, sessionFromCookieHeader } from "../auth/session.js";
 import type { Env } from "../config/env.js";
 import { parseDashboardFilters } from "../dashboard/filters.js";
-import { FUND_FAILED } from "../escrow/errors.js";
+import { FUND_FAILED, RELEASE_FAILED } from "../escrow/errors.js";
 import { fundSupplierPayment, type EscrowFundClient } from "../escrow/fund-supplier-payment.js";
+import {
+  releaseSupplierMilestone,
+  type EscrowReleaseClient,
+} from "../escrow/release-supplier-payment.js";
 import type { BusinessStore } from "../store/types.js";
 
 export function businessRoutes(
   env: Env,
   store: BusinessStore,
-  escrow: EscrowFundClient,
+  escrow: EscrowFundClient & EscrowReleaseClient,
 ): FastifyPluginAsync {
   return async (app) => {
     app.get(API_ROUTES.businessDashboard, async (request, reply) => {
@@ -67,6 +71,25 @@ export function businessRoutes(
       } catch (error) {
         request.log.error({ err: error }, "supplier payment was not funded");
         return reply.code(502).send(errorBody(FUND_FAILED));
+      }
+    });
+
+    app.post(`${API_ROUTES.businessSupplierPayments}/:id/release-milestone`, async (request, reply) => {
+      const session = sessionFromCookieHeader(request.headers.cookie, env.SESSION_SECRET);
+      if (!session) {
+        return reply.code(401).send(errorBody(SIGN_IN_REQUIRED_ERROR));
+      }
+
+      try {
+        const result = await releaseSupplierMilestone({
+          paymentId: readPaymentId(request.params),
+          store,
+          escrow,
+        });
+        return reply.code(result.statusCode).send(result.body);
+      } catch (error) {
+        request.log.error({ err: error }, "supplier milestone was not released");
+        return reply.code(502).send(errorBody(RELEASE_FAILED));
       }
     });
   };

@@ -12,9 +12,7 @@ import type {
 
 export interface StoredSupplierPayment extends BusinessUpcomingPayment {
   metadataSha256: string | null;
-  escrowContractId: string | null;
   fundTxHash: string | null;
-  releaseTxHash: string | null;
   /** UTC instant the escrow was funded. Null until fund_tx_hash is stored. */
   fundedAt: string | null;
 }
@@ -30,6 +28,10 @@ export interface FundedSupplierPayment {
   escrowContractId: string;
   fundTxHash: string;
   fundedAt: string;
+}
+
+export interface ReleasedSupplierPayment {
+  releaseTxHash: string;
 }
 
 export type NewSupplierPayment = SupplierPaymentInput;
@@ -68,4 +70,5 @@ export interface BusinessStore {
   saveSupplierMetadata(id: string, metadataSha256: string): Promise<void>;
   saveDeployedEscrow(id: string, escrowContractId: string): Promise<void>;
   markSupplierFunded(id: string, funded: FundedSupplierPayment): Promise<void>;
+  markSupplierReleased(id: string, released: ReleasedSupplierPayment): Promise<void>;
 }

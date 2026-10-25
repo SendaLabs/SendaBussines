@@ -73,6 +73,8 @@ export function buildDashboard(
         byListedOrder<BusinessCountry>(BUSINESS_COUNTRIES, b.country),
     );
 
+  const payable = book.payments.filter(isPayable);
+
   return {
     today: calendarDateInBuenosAires(now),
     company: book.company,
@@ -81,8 +83,8 @@ export function buildDashboard(
     kpis: {
       balance: book.balance,
       payable: {
-        value: book.payments.reduce((sum, payment) => sum + payment.amount, 0),
-        invoices: book.payments.length,
+        value: payable.reduce((sum, payment) => sum + payment.amount, 0),
+        invoices: payable.length,
       },
       spend: book.spend,
       international: book.international,
@@ -100,6 +102,10 @@ export function buildDashboard(
   };
 }
 
+function isPayable(payment: StoredSupplierPayment): boolean {
+  return payment.status === "pending" || payment.status === "scheduled" || payment.status === "approved";
+}
+
 function upcomingPayment(payment: StoredSupplierPayment): BusinessDashboard["upcomingPayments"][number] {
   return {
     id: payment.id,
@@ -110,5 +116,7 @@ function upcomingPayment(payment: StoredSupplierPayment): BusinessDashboard["upc
     status: payment.status,
     stellarAccount: payment.stellarAccount,
     fundedTxHash: payment.fundTxHash ?? payment.fundedTxHash,
+    escrowContractId: payment.escrowContractId,
+    releaseTxHash: payment.releaseTxHash,
   };
 }

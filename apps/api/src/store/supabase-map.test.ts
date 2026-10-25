@@ -98,3 +98,23 @@ test("the dashboard hash uses fund_tx_hash when the legacy column is also set", 
   assert.equal(payment.fundTxHash, "fund-tx-test");
   assert.equal(payment.fundedTxHash, "fund-tx-test");
 });
+
+test("released is a stored payment status", () => {
+  const payment = storedPaymentFromRow({
+    id: "pay-released",
+    supplier_name: "Taller Norte",
+    country: "ES",
+    amount_usd: 100,
+    due_on: "2026-10-09",
+    status: "released",
+    stellar_account: null,
+    funded_tx_hash: null,
+    metadata_sha256: null,
+    escrow_contract_id: "contract-id",
+    fund_tx_hash: "fund-tx-test",
+    release_tx_hash: "release-tx-test",
+  });
+  assert.equal(payment.status, "released");
+  assert.equal(payment.escrowContractId, "contract-id");
+  assert.equal(payment.releaseTxHash, "release-tx-test");
+});

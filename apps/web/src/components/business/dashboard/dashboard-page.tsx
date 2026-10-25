@@ -13,10 +13,16 @@ import {
 import Image from "next/image";
 import Link from "next/link";
 
-import { supplierPaymentCanBeFunded, type BusinessDashboard } from "@senda/shared";
+import {
+  supplierPaymentCanBeFunded,
+  supplierPaymentCanBeReleased,
+  type BusinessDashboard,
+  type BusinessPaymentStatus,
+} from "@senda/shared";
 
 import type { DashboardFilters } from "@/components/business/dashboard/filters";
 import { FundEscrowButton } from "@/components/business/dashboard/fund-escrow-button";
+import { ReleaseMilestoneButton } from "@/components/business/dashboard/release-milestone-button";
 import { MobileNav } from "@/components/business/dashboard/mobile-nav";
 import { NewSupplierPaymentButton } from "@/components/business/dashboard/new-supplier-payment-dialog";
 import { BUSINESS_DASHBOARD_PATH, BUSINESS_LOGIN_PATH } from "@/lib/site";
@@ -54,11 +60,12 @@ const CATEGORY_LABELS: Record<string, string> = {
   other: "Otros",
 };
 
-const STATUS_LABELS = {
+const STATUS_LABELS: Record<BusinessPaymentStatus, string> = {
   pending: "Pendiente",
   scheduled: "Programado",
   approved: "Aprobado",
-} as const;
+  released: "Liberado",
+};
 
 const ACTIVITY_LABELS = {
   supplierPayment: "Pago a proveedor",
@@ -484,6 +491,9 @@ function Upcoming({ data }: { data: BusinessDashboard }) {
               </div>
               {supplierPaymentCanBeFunded(payment) ? (
                 <FundEscrowButton paymentId={payment.id} />
+              ) : null}
+              {supplierPaymentCanBeReleased(payment) ? (
+                <ReleaseMilestoneButton paymentId={payment.id} />
               ) : null}
             </li>
           ))}

@@ -6,6 +6,7 @@ import type {
   CompanyBook,
   FundedSupplierPayment,
   NewSupplierPayment,
+  ReleasedSupplierPayment,
   Sep10Nonce,
   StoredSupplierPayment,
 } from "./types.js";
@@ -94,6 +95,21 @@ export function createMemoryBusinessStore(book: CompanyBook = DEMO_BOOK): Memory
       payment.escrowContractId = funded.escrowContractId;
       payment.fundTxHash = funded.fundTxHash;
       payment.fundedAt = funded.fundedAt;
+    },
+    async markSupplierReleased(id, released: ReleasedSupplierPayment) {
+      const payment = state.payments.find((item) => item.id === id);
+      const contractId = payment?.escrowContractId?.trim() ?? "";
+      const existingRelease = payment?.releaseTxHash?.trim() ?? "";
+      if (
+        !payment ||
+        payment.status !== "approved" ||
+        contractId.length === 0 ||
+        existingRelease.length > 0
+      ) {
+        throw new Error("No se pudo registrar la liberación.");
+      }
+      payment.status = "released";
+      payment.releaseTxHash = released.releaseTxHash;
     },
     rememberNonce(nonce) {
       if (nonce.nonce.length === 0) {

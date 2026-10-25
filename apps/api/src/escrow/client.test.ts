@@ -462,6 +462,7 @@ describe("Trustless Work client", () => {
     const record = await client.approveAndRelease({
       engagementId: ENGAGEMENT_ID,
       contractId: PREDICTED_CONTRACT_ID,
+      milestoneIndexes: [0],
     });
     const release = calls[0];
     assert.ok(release);
@@ -471,6 +472,22 @@ describe("Trustless Work client", () => {
     assert.equal(record.released, true);
     assert.equal(record.funded, false);
     assert.equal(record.releaseTxHash, "release-hash");
+  });
+
+  it("does not send a string milestone index", async () => {
+    const treasury = Keypair.random();
+    const { client, calls } = clientWith(treasury, () => json(500, { error: "unused" }));
+
+    await assert.rejects(
+      () =>
+        client.approveAndRelease({
+          engagementId: ENGAGEMENT_ID,
+          contractId: PREDICTED_CONTRACT_ID,
+          milestoneIndexes: ["0"] as unknown as readonly [0],
+        }),
+      (error: unknown) => error instanceof EscrowClientError && error.statusCode === 502,
+    );
+    assert.equal(calls.length, 0);
   });
 });
 
