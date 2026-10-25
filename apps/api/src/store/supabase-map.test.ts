@@ -65,6 +65,7 @@ test("supabase rows map onto the book without keeping database column names", ()
   assert.equal(book.payments[0]?.escrowContractId, null);
   assert.equal(book.payments[0]?.fundTxHash, null);
   assert.equal(book.payments[0]?.releaseTxHash, null);
+  assert.equal(book.payments[0]?.fundedAt, null);
   assert.equal(book.user.avatar, "/images/P_Delfina.svg");
   assert.equal(book.balance.change, 0.084);
   assert.equal(book.spend.change, -0.042);

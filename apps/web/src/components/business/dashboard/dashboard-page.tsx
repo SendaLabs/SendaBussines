@@ -13,9 +13,10 @@ import {
 import Image from "next/image";
 import Link from "next/link";
 
-import type { BusinessDashboard } from "@senda/shared";
+import { supplierPaymentCanBeFunded, type BusinessDashboard } from "@senda/shared";
 
 import type { DashboardFilters } from "@/components/business/dashboard/filters";
+import { FundEscrowButton } from "@/components/business/dashboard/fund-escrow-button";
 import { MobileNav } from "@/components/business/dashboard/mobile-nav";
 import { NewSupplierPaymentButton } from "@/components/business/dashboard/new-supplier-payment-dialog";
 import { BUSINESS_DASHBOARD_PATH, BUSINESS_LOGIN_PATH } from "@/lib/site";
@@ -461,27 +462,29 @@ function Upcoming({ data }: { data: BusinessDashboard }) {
       ) : (
         <ul className="divide-y divide-stone/70">
           {data.upcomingPayments.map((payment) => (
-            <li
-              key={payment.id}
-              className="flex items-center justify-between gap-3 py-3 text-sm"
-            >
-              <div className="min-w-0">
-                <p className="truncate font-medium text-charcoal">
-                  {payment.supplier}
-                </p>
-                <p className="text-xs text-charcoal/50">
-                  {payment.dueDate === data.today ? "Hoy" : payment.dueDate} ·{" "}
-                  {COUNTRY_LABELS[payment.country]}
-                </p>
+            <li key={payment.id} className="py-3 text-sm">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate font-medium text-charcoal">
+                    {payment.supplier}
+                  </p>
+                  <p className="text-xs text-charcoal/50">
+                    {payment.dueDate === data.today ? "Hoy" : payment.dueDate} ·{" "}
+                    {COUNTRY_LABELS[payment.country]}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="font-medium text-forest">
+                    {money.format(payment.amount)}
+                  </p>
+                  <p className="text-xs text-charcoal/50">
+                    {STATUS_LABELS[payment.status]}
+                  </p>
+                </div>
               </div>
-              <div className="text-right">
-                <p className="font-medium text-forest">
-                  {money.format(payment.amount)}
-                </p>
-                <p className="text-xs text-charcoal/50">
-                  {STATUS_LABELS[payment.status]}
-                </p>
-              </div>
+              {supplierPaymentCanBeFunded(payment) ? (
+                <FundEscrowButton paymentId={payment.id} />
+              ) : null}
             </li>
           ))}
         </ul>

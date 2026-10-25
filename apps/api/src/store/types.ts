@@ -15,6 +15,21 @@ export interface StoredSupplierPayment extends BusinessUpcomingPayment {
   escrowContractId: string | null;
   fundTxHash: string | null;
   releaseTxHash: string | null;
+  /** UTC instant the escrow was funded. Null until fund_tx_hash is stored. */
+  fundedAt: string | null;
+}
+
+export interface SupplierFundingRow {
+  id: string;
+  amount: number;
+  fundTxHash: string | null;
+  fundedAt: string | null;
+}
+
+export interface FundedSupplierPayment {
+  escrowContractId: string;
+  fundTxHash: string;
+  fundedAt: string;
 }
 
 export type NewSupplierPayment = SupplierPaymentInput;
@@ -45,4 +60,11 @@ export interface CompanyBook {
 export interface BusinessStore {
   getDashboard(filters: BusinessDashboardFilters): Promise<BusinessDashboard>;
   createSupplierPayment(input: NewSupplierPayment): Promise<SupplierPaymentCreated>;
+  findSupplierPayment(id: string): Promise<StoredSupplierPayment | null>;
+  supplierFundingSnapshot(): Promise<{
+    monthlyCapUsd: number;
+    payments: SupplierFundingRow[];
+  }>;
+  saveSupplierMetadata(id: string, metadataSha256: string): Promise<void>;
+  markSupplierFunded(id: string, funded: FundedSupplierPayment): Promise<void>;
 }

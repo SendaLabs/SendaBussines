@@ -107,6 +107,21 @@ export const API_ROUTES = {
   businessSupplierPayments: "/business/supplier-payments",
 } as const;
 
+export function supplierPaymentFundEscrowPath(paymentId: string): string {
+  return `${API_ROUTES.businessSupplierPayments}/${encodeURIComponent(paymentId)}/fund-escrow`;
+}
+
+/** Pending rows with a Stellar account. Seed payments have no account, so they stay out. */
+export function supplierPaymentCanBeFunded(
+  payment: Pick<BusinessUpcomingPayment, "status" | "stellarAccount">,
+): boolean {
+  return (
+    payment.status === "pending" &&
+    typeof payment.stellarAccount === "string" &&
+    payment.stellarAccount.trim().length > 0
+  );
+}
+
 export interface ApiErrorBody {
   error: string;
 }

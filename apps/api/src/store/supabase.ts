@@ -2,8 +2,8 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Env } from "../config/env.js";
 import { buildDashboard } from "../dashboard/project.js";
 import { supplierPaymentWrite } from "./supplier-payment-write.js";
-import { companyBookFromRow } from "./supabase-map.js";
-import type { BusinessStore, NewSupplierPayment } from "./types.js";
+import { companyBookFromRow, storedPaymentFromRow } from "./supabase-map.js";
+import type { BusinessStore, FundedSupplierPayment, NewSupplierPayment } from "./types.js";
 
 const COMPANY_COLUMNS = `
   name,
@@ -32,7 +32,8 @@ const COMPANY_COLUMNS = `
     metadata_sha256,
     escrow_contract_id,
     fund_tx_hash,
-    release_tx_hash
+    release_tx_hash,
+    funded_at
   ),
   activity_entries (
     id,
@@ -76,7 +77,106 @@ export function createSupabaseBusinessStore(
     async createSupplierPayment(input) {
       return insertSupplierPayment(client, input);
     },
+    async findSupplierPayment(id) {
+      const { data, error } = await client
+        .from("supplier_payments")
+        .select(PAYMENT_COLUMNS)
+        .eq("id", id)
+        .maybeSingle();
+      if (error) {
+        if (error.code === "22P02") return null;
+        throw new Error("No se pudo leer el pago.", { cause: error.code });
+      }
+      if (!data) return null;
+      return storedPaymentFromRow(asRow(data));
+    },
+    async supplierFundingSnapshot() {
+      const { data: companies, error: companyError } = await client
+        .from("companies")
+        .select("monthly_cap_usd");
+      if (companyError || !Array.isArray(companies) || companies.length !== 1) {
+        throw new Error("No se pudo leer el tope.", { cause: companyError?.code });
+      }
+      const company = companies[0];
+      const monthlyCapUsd = monthlyCapOf(company);
+
+      const { data: payments, error: paymentError } = await client
+        .from("supplier_payments")
+        .select(PAYMENT_COLUMNS);
+      if (paymentError || !Array.isArray(payments)) {
+        throw new Error("No se pudo leer el tope.", { cause: paymentError?.code });
+      }
+      return {
+        monthlyCapUsd,
+        payments: payments.map((row) => {
+          const payment = storedPaymentFromRow(asRow(row));
+          return {
+            id: payment.id,
+            amount: payment.amount,
+            fundTxHash: payment.fundTxHash,
+            fundedAt: payment.fundedAt,
+          };
+        }),
+      };
+    },
+    async saveSupplierMetadata(id, metadataSha256) {
+      const { error } = await client
+        .from("supplier_payments")
+        .update({ metadata_sha256: metadataSha256 })
+        .eq("id", id);
+      if (error) throw new Error("No se pudo guardar el pago.", { cause: error.code });
+    },
+    async markSupplierFunded(id, funded: FundedSupplierPayment) {
+      const { data, error } = await client
+        .from("supplier_payments")
+        .update({
+          status: "approved",
+          escrow_contract_id: funded.escrowContractId,
+          fund_tx_hash: funded.fundTxHash,
+          funded_at: funded.fundedAt,
+        })
+        .eq("id", id)
+        .eq("status", "pending")
+        .select("id");
+      if (error || !Array.isArray(data) || data.length !== 1) {
+        throw new Error("No se pudo registrar el fondeo.", { cause: error?.code });
+      }
+    },
   };
+}
+
+const PAYMENT_COLUMNS = `
+  id,
+  supplier_name,
+  country,
+  amount_usd,
+  due_on,
+  status,
+  stellar_account,
+  funded_tx_hash,
+  metadata_sha256,
+  escrow_contract_id,
+  fund_tx_hash,
+  release_tx_hash,
+  funded_at
+`;
+
+function asRow(value: unknown): Record<string, unknown> {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("No se pudo leer el pago.");
+  }
+  return value as Record<string, unknown>;
+}
+
+function monthlyCapOf(value: unknown): number {
+  if (value === null || typeof value !== "object" || !("monthly_cap_usd" in value)) {
+    throw new Error("No se pudo leer el tope.");
+  }
+  const raw = value.monthly_cap_usd;
+  if (raw == null) return 50_000;
+  const parsed = typeof raw === "number" ? raw : typeof raw === "string" ? Number(raw) : NaN;
+  if (!Number.isFinite(parsed)) throw new Error("No se pudo leer el tope.");
+  return parsed;
 }
 
 async function insertSupplierPayment(

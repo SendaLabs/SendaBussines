@@ -49,6 +49,7 @@ test("the seeded company cap is 50000", async () => {
     assert.equal(payment?.metadataSha256, null);
     assert.equal(payment?.fundTxHash, null);
     assert.equal(payment?.escrowContractId, null);
+    assert.equal(payment?.fundedAt, null);
     assert.equal(payment?.releaseTxHash, null);
   }
 });

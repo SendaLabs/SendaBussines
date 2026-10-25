@@ -70,6 +70,28 @@ function month(value: string): string {
   return value.slice(0, 7);
 }
 
+export function storedPaymentFromRow(payment: Record<string, unknown>): CompanyBook["payments"][number] {
+  return {
+    id: requiredString(payment, "id"),
+    supplier: requiredString(payment, "supplier_name"),
+    country: oneOf(requiredString(payment, "country"), BUSINESS_COUNTRIES, "país") satisfies BusinessCountry,
+    amount: requiredNumber(payment, "amount_usd"),
+    dueDate: day(requiredString(payment, "due_on")),
+    status: oneOf(
+      requiredString(payment, "status"),
+      BUSINESS_PAYMENT_STATUSES,
+      "estado",
+    ) satisfies BusinessPaymentStatus,
+    stellarAccount: nullableString(payment, "stellar_account"),
+    fundedTxHash: nullableString(payment, "funded_tx_hash"),
+    metadataSha256: nullableString(payment, "metadata_sha256"),
+    escrowContractId: nullableString(payment, "escrow_contract_id"),
+    fundTxHash: nullableString(payment, "fund_tx_hash"),
+    releaseTxHash: nullableString(payment, "release_tx_hash"),
+    fundedAt: nullableString(payment, "funded_at"),
+  };
+}
+
 export function companyBookFromRow(value: unknown): CompanyBook {
   const row = asRecord(value, "empresa");
   const face = oneRecord(row.panel_faces, "cara");
@@ -126,24 +148,7 @@ export function companyBookFromRow(value: unknown): CompanyBook {
       value: requiredNumber(kpi, "international_usd"),
       payments: requiredNumber(kpi, "international_payments"),
     },
-    payments: manyRecords(row.supplier_payments, "pago").map((payment) => ({
-      id: requiredString(payment, "id"),
-      supplier: requiredString(payment, "supplier_name"),
-      country: oneOf(requiredString(payment, "country"), BUSINESS_COUNTRIES, "país") satisfies BusinessCountry,
-      amount: requiredNumber(payment, "amount_usd"),
-      dueDate: day(requiredString(payment, "due_on")),
-      status: oneOf(
-        requiredString(payment, "status"),
-        BUSINESS_PAYMENT_STATUSES,
-        "estado",
-      ) satisfies BusinessPaymentStatus,
-      stellarAccount: nullableString(payment, "stellar_account"),
-      fundedTxHash: nullableString(payment, "funded_tx_hash"),
-      metadataSha256: nullableString(payment, "metadata_sha256"),
-      escrowContractId: nullableString(payment, "escrow_contract_id"),
-      fundTxHash: nullableString(payment, "fund_tx_hash"),
-      releaseTxHash: nullableString(payment, "release_tx_hash"),
-    })),
+    payments: manyRecords(row.supplier_payments, "pago").map((payment) => storedPaymentFromRow(payment)),
     activity: manyRecords(row.activity_entries, "actividad").map((entry) => ({
       id: requiredString(entry, "id"),
       kind: oneOf(requiredString(entry, "kind"), BUSINESS_ACTIVITY_KINDS, "movimiento") satisfies BusinessActivityKind,

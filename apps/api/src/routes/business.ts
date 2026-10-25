@@ -4,9 +4,15 @@ import { API_ROUTES, parseSupplierPayment, type ApiErrorBody } from "@senda/shar
 import { SIGN_IN_REQUIRED_ERROR, sessionFromCookieHeader } from "../auth/session.js";
 import type { Env } from "../config/env.js";
 import { parseDashboardFilters } from "../dashboard/filters.js";
+import { FUND_FAILED } from "../escrow/errors.js";
+import { fundSupplierPayment, type EscrowFundClient } from "../escrow/fund-supplier-payment.js";
 import type { BusinessStore } from "../store/types.js";
 
-export function businessRoutes(env: Env, store: BusinessStore): FastifyPluginAsync {
+export function businessRoutes(
+  env: Env,
+  store: BusinessStore,
+  escrow: EscrowFundClient,
+): FastifyPluginAsync {
   return async (app) => {
     app.get(API_ROUTES.businessDashboard, async (request, reply) => {
       const session = sessionFromCookieHeader(request.headers.cookie, env.SESSION_SECRET);
@@ -43,6 +49,26 @@ export function businessRoutes(env: Env, store: BusinessStore): FastifyPluginAsy
         return reply.code(500).send(errorBody("No se pudo registrar el pago."));
       }
     });
+
+    app.post(`${API_ROUTES.businessSupplierPayments}/:id/fund-escrow`, async (request, reply) => {
+      const session = sessionFromCookieHeader(request.headers.cookie, env.SESSION_SECRET);
+      if (!session) {
+        return reply.code(401).send(errorBody(SIGN_IN_REQUIRED_ERROR));
+      }
+
+      try {
+        const result = await fundSupplierPayment({
+          paymentId: readPaymentId(request.params),
+          treasuryAccount: env.STELLAR_ADMIN_PUBLIC,
+          store,
+          escrow,
+        });
+        return reply.code(result.statusCode).send(result.body);
+      } catch (error) {
+        request.log.error({ err: error }, "supplier payment was not funded");
+        return reply.code(502).send(errorBody(FUND_FAILED));
+      }
+    });
   };
 }
 
@@ -52,6 +78,11 @@ function isEd25519PublicKey(account: string): boolean {
   } catch {
     return false;
   }
+}
+
+function readPaymentId(params: unknown): string {
+  if (typeof params !== "object" || params === null || !("id" in params)) return "";
+  return typeof params.id === "string" ? params.id.trim() : "";
 }
 
 function errorBody(error: string): ApiErrorBody {

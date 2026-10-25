@@ -4,6 +4,7 @@ import { supplierPaymentWrite } from "./supplier-payment-write.js";
 import type {
   BusinessStore,
   CompanyBook,
+  FundedSupplierPayment,
   NewSupplierPayment,
   Sep10Nonce,
   StoredSupplierPayment,
@@ -56,6 +57,36 @@ export function createMemoryBusinessStore(book: CompanyBook = DEMO_BOOK): Memory
     readSupplierPayment(id) {
       const payment = state.payments.find((item) => item.id === id);
       return payment ? copyPayment(payment) : null;
+    },
+    async findSupplierPayment(id) {
+      const payment = state.payments.find((item) => item.id === id);
+      return payment ? copyPayment(payment) : null;
+    },
+    async supplierFundingSnapshot() {
+      return {
+        monthlyCapUsd: state.monthlyCapUsd,
+        payments: state.payments.map((payment) => ({
+          id: payment.id,
+          amount: payment.amount,
+          fundTxHash: payment.fundTxHash,
+          fundedAt: payment.fundedAt,
+        })),
+      };
+    },
+    async saveSupplierMetadata(id, metadataSha256) {
+      const payment = state.payments.find((item) => item.id === id);
+      if (!payment) throw new Error("No se pudo guardar el pago.");
+      payment.metadataSha256 = metadataSha256;
+    },
+    async markSupplierFunded(id, funded: FundedSupplierPayment) {
+      const payment = state.payments.find((item) => item.id === id);
+      if (!payment || payment.status !== "pending") {
+        throw new Error("No se pudo registrar el fondeo.");
+      }
+      payment.status = "approved";
+      payment.escrowContractId = funded.escrowContractId;
+      payment.fundTxHash = funded.fundTxHash;
+      payment.fundedAt = funded.fundedAt;
     },
     rememberNonce(nonce) {
       if (nonce.nonce.length === 0) {

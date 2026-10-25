@@ -31,6 +31,7 @@ export function supplierPaymentWrite(
     escrowContractId: null,
     fundTxHash: null,
     releaseTxHash: null,
+    fundedAt: null,
   };
   const activity: BusinessActivity = {
     id: activityId,

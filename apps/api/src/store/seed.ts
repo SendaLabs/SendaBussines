@@ -8,6 +8,7 @@ function unfunded(payment: BusinessUpcomingPayment): StoredSupplierPayment {
     escrowContractId: null,
     fundTxHash: null,
     releaseTxHash: null,
+    fundedAt: null,
   };
 }
 
