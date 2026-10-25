@@ -83,7 +83,8 @@ export function storedPaymentFromRow(payment: Record<string, unknown>): CompanyB
       "estado",
     ) satisfies BusinessPaymentStatus,
     stellarAccount: nullableString(payment, "stellar_account"),
-    fundedTxHash: nullableString(payment, "funded_tx_hash"),
+    fundedTxHash:
+      nullableString(payment, "fund_tx_hash") ?? nullableString(payment, "funded_tx_hash"),
     metadataSha256: nullableString(payment, "metadata_sha256"),
     escrowContractId: nullableString(payment, "escrow_contract_id"),
     fundTxHash: nullableString(payment, "fund_tx_hash"),

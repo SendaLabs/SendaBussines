@@ -109,6 +109,6 @@ function upcomingPayment(payment: StoredSupplierPayment): BusinessDashboard["upc
     dueDate: payment.dueDate,
     status: payment.status,
     stellarAccount: payment.stellarAccount,
-    fundedTxHash: payment.fundedTxHash,
+    fundedTxHash: payment.fundTxHash ?? payment.fundedTxHash,
   };
 }

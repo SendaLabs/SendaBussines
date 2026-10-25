@@ -78,6 +78,13 @@ export function createMemoryBusinessStore(book: CompanyBook = DEMO_BOOK): Memory
       if (!payment) throw new Error("No se pudo guardar el pago.");
       payment.metadataSha256 = metadataSha256;
     },
+    async saveDeployedEscrow(id, escrowContractId) {
+      const payment = state.payments.find((item) => item.id === id);
+      if (!payment || payment.status !== "pending") {
+        throw new Error("No se pudo guardar el depósito.");
+      }
+      payment.escrowContractId = escrowContractId;
+    },
     async markSupplierFunded(id, funded: FundedSupplierPayment) {
       const payment = state.payments.find((item) => item.id === id);
       if (!payment || payment.status !== "pending") {

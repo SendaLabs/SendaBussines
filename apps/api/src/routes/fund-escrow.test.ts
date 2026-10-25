@@ -282,7 +282,6 @@ test("a 100 payment within the 50000 cap is approved and the balance stays 24842
     assert.equal(stored?.status, "approved");
     assert.equal(stored?.escrowContractId, CONTRACT_ID);
     assert.equal(stored?.fundTxHash, FUND_HASH);
-    assert.equal(stored?.fundedTxHash, null);
     assert.equal(stored?.releaseTxHash, null);
     assert.equal(stored?.fundedAt?.slice(0, 7), new Date().toISOString().slice(0, 7));
 
@@ -293,6 +292,7 @@ test("a 100 payment within the 50000 cap is approved and the balance stays 24842
     assert.equal(after.activity.length, before.activity.length);
     const listed = after.upcomingPayments.find((payment) => payment.id === created.id);
     assert.equal(listed?.status, "approved");
+    assert.equal(listed?.fundedTxHash, FUND_HASH);
     assert.equal(listed ? supplierPaymentCanBeFunded(listed) : true, false);
 
     const again = await fundPayment(app, created.id, token);
@@ -445,7 +445,7 @@ test("a failed fund leaves the payment pending", async () => {
     assert.equal(escrow.funds.length, 1);
     const stored = store.readSupplierPayment(created.id);
     assert.equal(stored?.status, "pending");
-    assert.equal(stored?.escrowContractId, null);
+    assert.equal(stored?.escrowContractId, CONTRACT_ID);
     assert.equal(stored?.fundTxHash, null);
     assert.notEqual(stored?.status, "approved");
     const dashboard = await readDashboard(app, token);
@@ -463,8 +463,50 @@ test("a trustline rejection leaves the payment pending", async () => {
     assert.deepEqual(response.json(), {
       error: "La cuenta del proveedor tiene que poder recibir USDC de testnet.",
     });
+    const stored = store.readSupplierPayment(created.id);
+    assert.equal(stored?.status, "pending");
+    assert.equal(stored?.escrowContractId, CONTRACT_ID);
+    assert.equal(stored?.fundTxHash, null);
+  });
+});
+
+test("a later call funds the saved contract and does not deploy again", async () => {
+  await withFundApi(async ({ app, supplier, token, escrow, store }) => {
+    escrow.fundError = new EscrowClientError(502, FUND_FAILED);
+    const created = await createPending(app, token, supplier, 100);
+    const failed = await fundPayment(app, created.id, token);
+    assert.equal(failed.statusCode, 502);
+    assert.equal(escrow.deploys.length, 1);
+    assert.equal(escrow.funds.length, 1);
     assert.equal(store.readSupplierPayment(created.id)?.status, "pending");
+    assert.equal(store.readSupplierPayment(created.id)?.escrowContractId, CONTRACT_ID);
     assert.equal(store.readSupplierPayment(created.id)?.fundTxHash, null);
+
+    escrow.fundError = null;
+    const response = await fundPayment(app, created.id, token, {
+      supplierName: SUPPLIER_NAME,
+    });
+    assert.equal(response.statusCode, 200);
+    assert.deepEqual(response.json(), {
+      id: created.id,
+      status: "approved",
+      escrowContractId: CONTRACT_ID,
+      fundTxHash: FUND_HASH,
+    });
+    assert.equal(escrow.deploys.length, 1);
+    assert.equal(escrow.funds.length, 2);
+    assert.equal(escrow.funds[1]?.contractId, CONTRACT_ID);
+    assert.equal(escrow.funds[1]?.engagementId, created.id);
+
+    const stored = store.readSupplierPayment(created.id);
+    assert.equal(stored?.status, "approved");
+    assert.equal(stored?.escrowContractId, CONTRACT_ID);
+    assert.equal(stored?.fundTxHash, FUND_HASH);
+    const dashboard = await readDashboard(app, token);
+    const listed = dashboard.upcomingPayments.find((payment) => payment.id === created.id);
+    assert.equal(listed?.fundedTxHash, FUND_HASH);
+    assert.equal(dashboard.kpis.balance.value, 248420);
+    assert.deepEqual(dashboard.kpis.payable, { value: 10425, invoices: 6 });
   });
 });
 

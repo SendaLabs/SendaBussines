@@ -66,5 +66,6 @@ export interface BusinessStore {
     payments: SupplierFundingRow[];
   }>;
   saveSupplierMetadata(id: string, metadataSha256: string): Promise<void>;
+  saveDeployedEscrow(id: string, escrowContractId: string): Promise<void>;
   markSupplierFunded(id: string, funded: FundedSupplierPayment): Promise<void>;
 }

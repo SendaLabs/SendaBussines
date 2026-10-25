@@ -55,21 +55,17 @@ export async function fundSupplierPayment(input: {
   }
 
   try {
-    const deployed = await input.escrow.deploy({
-      engagementId: payment.id,
-      amount: payment.amount,
-      receiver,
-    });
-    if (!deployed.contractId) return fail(502, DEPLOY_FAILED);
+    const contractId = await deployedContractId(input, payment, receiver);
+    if (!contractId) return fail(502, DEPLOY_FAILED);
 
     const funded = await input.escrow.fund({
       engagementId: payment.id,
-      contractId: deployed.contractId,
+      contractId,
       amount: payment.amount,
     });
     if (!funded.funded || !funded.fundTxHash) return fail(502, FUND_FAILED);
 
-    const escrowContractId = funded.contractId ?? deployed.contractId;
+    const escrowContractId = funded.contractId ?? contractId;
     await input.store.markSupplierFunded(payment.id, {
       escrowContractId,
       fundTxHash: funded.fundTxHash,
@@ -89,6 +85,24 @@ export async function fundSupplierPayment(input: {
     if (clientError) return clientError;
     throw error;
   }
+}
+
+async function deployedContractId(
+  input: { store: BusinessStore; escrow: EscrowFundClient },
+  payment: StoredSupplierPayment,
+  receiver: string,
+): Promise<string | null> {
+  const existing = payment.escrowContractId?.trim() ?? "";
+  if (existing.length > 0) return existing;
+
+  const deployed = await input.escrow.deploy({
+    engagementId: payment.id,
+    amount: payment.amount,
+    receiver,
+  });
+  if (!deployed.contractId) return null;
+  await input.store.saveDeployedEscrow(payment.id, deployed.contractId);
+  return deployed.contractId;
 }
 
 function metadataOf(payment: StoredSupplierPayment, receiver: string) {

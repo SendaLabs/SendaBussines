@@ -126,6 +126,17 @@ export function createSupabaseBusinessStore(
         .eq("id", id);
       if (error) throw new Error("No se pudo guardar el pago.", { cause: error.code });
     },
+    async saveDeployedEscrow(id, escrowContractId) {
+      const { data, error } = await client
+        .from("supplier_payments")
+        .update({ escrow_contract_id: escrowContractId })
+        .eq("id", id)
+        .eq("status", "pending")
+        .select("id");
+      if (error || !Array.isArray(data) || data.length !== 1) {
+        throw new Error("No se pudo guardar el depósito.", { cause: error?.code });
+      }
+    },
     async markSupplierFunded(id, funded: FundedSupplierPayment) {
       const { data, error } = await client
         .from("supplier_payments")

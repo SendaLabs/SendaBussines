@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { companyBookFromRow } from "./supabase-map.js";
+import { companyBookFromRow, storedPaymentFromRow } from "./supabase-map.js";
 
 test("supabase rows map onto the book without keeping database column names", () => {
   const book = companyBookFromRow({
@@ -78,4 +78,23 @@ test("supabase rows map onto the book without keeping database column names", ()
   assert.equal(book.categories.previous.slices[0]?.key, "services");
   assert.equal(book.cards.active, 3);
   assert.equal(book.countryVolumes[0]?.amount, 51000);
+});
+
+test("the dashboard hash uses fund_tx_hash when the legacy column is also set", () => {
+  const payment = storedPaymentFromRow({
+    id: "pay-funded",
+    supplier_name: "Taller Norte",
+    country: "ES",
+    amount_usd: 100,
+    due_on: "2026-10-09",
+    status: "approved",
+    stellar_account: null,
+    funded_tx_hash: "legacy-column",
+    metadata_sha256: null,
+    escrow_contract_id: null,
+    fund_tx_hash: "fund-tx-test",
+    release_tx_hash: null,
+  });
+  assert.equal(payment.fundTxHash, "fund-tx-test");
+  assert.equal(payment.fundedTxHash, "fund-tx-test");
 });
