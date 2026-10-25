@@ -100,6 +100,7 @@ export function companyBookFromRow(value: unknown): CompanyBook {
   }
 
   return {
+    monthlyCapUsd: row.monthly_cap_usd == null ? 50_000 : requiredNumber(row, "monthly_cap_usd"),
     company: {
       name: requiredString(row, "name"),
       countries: requiredNumber(row, "country_count"),
@@ -138,6 +139,10 @@ export function companyBookFromRow(value: unknown): CompanyBook {
       ) satisfies BusinessPaymentStatus,
       stellarAccount: nullableString(payment, "stellar_account"),
       fundedTxHash: nullableString(payment, "funded_tx_hash"),
+      metadataSha256: nullableString(payment, "metadata_sha256"),
+      escrowContractId: nullableString(payment, "escrow_contract_id"),
+      fundTxHash: nullableString(payment, "fund_tx_hash"),
+      releaseTxHash: nullableString(payment, "release_tx_hash"),
     })),
     activity: manyRecords(row.activity_entries, "actividad").map((entry) => ({
       id: requiredString(entry, "id"),

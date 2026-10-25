@@ -6,7 +6,7 @@ import {
   type BusinessDashboard,
   type BusinessDashboardFilters,
 } from "@senda/shared";
-import type { CompanyBook } from "../store/types.js";
+import type { CompanyBook, StoredSupplierPayment } from "../store/types.js";
 
 const formatter = new Intl.DateTimeFormat("en-US", {
   timeZone: "America/Argentina/Buenos_Aires",
@@ -43,7 +43,8 @@ export function buildDashboard(
     .filter((payment) => inRegion(payment.country))
     .sort(
       (a, b) => a.dueDate.localeCompare(b.dueDate) || a.supplier.localeCompare(b.supplier),
-    );
+    )
+    .map(upcomingPayment);
 
   const activity = book.activity
     .filter((item) => inRegion(item.from) || inRegion(item.to))
@@ -96,5 +97,18 @@ export function buildDashboard(
     upcomingPayments,
     activity,
     countryVolumes,
+  };
+}
+
+function upcomingPayment(payment: StoredSupplierPayment): BusinessDashboard["upcomingPayments"][number] {
+  return {
+    id: payment.id,
+    supplier: payment.supplier,
+    country: payment.country,
+    amount: payment.amount,
+    dueDate: payment.dueDate,
+    status: payment.status,
+    stellarAccount: payment.stellarAccount,
+    fundedTxHash: payment.fundedTxHash,
   };
 }

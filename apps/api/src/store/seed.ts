@@ -1,7 +1,19 @@
-import type { CompanyBook } from "./types.js";
+import type { BusinessUpcomingPayment } from "@senda/shared";
+import type { CompanyBook, StoredSupplierPayment } from "./types.js";
 
-/** Same figures as the SQL seed. Payable is the sum of these payments: 10325 across 5. */
+function unfunded(payment: BusinessUpcomingPayment): StoredSupplierPayment {
+  return {
+    ...payment,
+    metadataSha256: null,
+    escrowContractId: null,
+    fundTxHash: null,
+    releaseTxHash: null,
+  };
+}
+
+/** Same figures as the SQL seed. Payable is 10325 across 5. The monthly cap is 50000. */
 export const DEMO_BOOK: CompanyBook = {
+  monthlyCapUsd: 50_000,
   company: { name: "Empresa Demo S.R.L.", countries: 4 },
   user: {
     firstName: "Delfina",
@@ -13,7 +25,7 @@ export const DEMO_BOOK: CompanyBook = {
   spend: { value: 18_290, change: -0.042 },
   international: { value: 72_640, payments: 24 },
   payments: [
-    {
+    unfunded({
       id: "pay-nube-austral",
       supplier: "Nube Austral Hosting",
       country: "US",
@@ -22,8 +34,8 @@ export const DEMO_BOOK: CompanyBook = {
       status: "pending",
       stellarAccount: null,
       fundedTxHash: null,
-    },
-    {
+    }),
+    unfunded({
       id: "pay-rios",
       supplier: "Estudio Contable Ríos",
       country: "AR",
@@ -32,8 +44,8 @@ export const DEMO_BOOK: CompanyBook = {
       status: "scheduled",
       stellarAccount: null,
       fundedTxHash: null,
-    },
-    {
+    }),
+    unfunded({
       id: "pay-pixel",
       supplier: "Pixel Sur Diseño",
       country: "ES",
@@ -42,8 +54,8 @@ export const DEMO_BOOK: CompanyBook = {
       status: "scheduled",
       stellarAccount: null,
       fundedTxHash: null,
-    },
-    {
+    }),
+    unfunded({
       id: "pay-pacifico",
       supplier: "Transportes Pacífico",
       country: "CR",
@@ -52,8 +64,8 @@ export const DEMO_BOOK: CompanyBook = {
       status: "approved",
       stellarAccount: null,
       fundedTxHash: null,
-    },
-    {
+    }),
+    unfunded({
       id: "pay-norte",
       supplier: "Agencia Norte Media",
       country: "AR",
@@ -62,7 +74,7 @@ export const DEMO_BOOK: CompanyBook = {
       status: "pending",
       stellarAccount: null,
       fundedTxHash: null,
-    },
+    }),
   ],
   activity: [
     {

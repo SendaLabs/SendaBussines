@@ -7,6 +7,7 @@ import type { BusinessStore } from "./types.js";
 const COMPANY_COLUMNS = `
   name,
   country_count,
+  monthly_cap_usd,
   panel_faces (first_name, full_name, avatar_path),
   kpi_snapshots (
     balance_usd,
@@ -26,7 +27,11 @@ const COMPANY_COLUMNS = `
     due_on,
     status,
     stellar_account,
-    funded_tx_hash
+    funded_tx_hash,
+    metadata_sha256,
+    escrow_contract_id,
+    fund_tx_hash,
+    release_tx_hash
   ),
   activity_entries (
     id,

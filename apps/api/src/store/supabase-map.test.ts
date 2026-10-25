@@ -6,6 +6,7 @@ test("supabase rows map onto the book without keeping database column names", ()
   const book = companyBookFromRow({
     name: "Empresa Demo S.R.L.",
     country_count: 4,
+    monthly_cap_usd: 50000,
     panel_faces: {
       first_name: "Delfina",
       full_name: "Delfina Corradini",
@@ -33,6 +34,10 @@ test("supabase rows map onto the book without keeping database column names", ()
         status: "pending",
         stellar_account: null,
         funded_tx_hash: null,
+        metadata_sha256: "0123456789abcdef".repeat(4),
+        escrow_contract_id: null,
+        fund_tx_hash: null,
+        release_tx_hash: null,
       },
     ],
     activity_entries: [
@@ -55,6 +60,11 @@ test("supabase rows map onto the book without keeping database column names", ()
     country_volumes: [{ country: "US", amount_usd: "51000" }],
   });
 
+  assert.equal(book.monthlyCapUsd, 50000);
+  assert.equal(book.payments[0]?.metadataSha256, "0123456789abcdef".repeat(4));
+  assert.equal(book.payments[0]?.escrowContractId, null);
+  assert.equal(book.payments[0]?.fundTxHash, null);
+  assert.equal(book.payments[0]?.releaseTxHash, null);
   assert.equal(book.user.avatar, "/images/P_Delfina.svg");
   assert.equal(book.balance.change, 0.084);
   assert.equal(book.spend.change, -0.042);
