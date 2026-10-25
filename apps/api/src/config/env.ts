@@ -14,6 +14,10 @@ const envSchema = z.object({
     .string()
     .url()
     .default("https://soroban-testnet.stellar.org"),
+  // Empty in tests and in .env.example. Never sent to the browser and never logged.
+  TRUSTLESS_WORK_API_KEY: z.string().default(""),
+  TREASURY_SECRET: z.string().default(""),
+  STELLAR_ADMIN_PUBLIC: z.string().default(""),
 });
 
 export type Env = z.infer<typeof envSchema>;
