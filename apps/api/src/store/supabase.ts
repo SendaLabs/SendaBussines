@@ -1,9 +1,19 @@
+import {
+  BUSINESS_COUNTRIES,
+  type BusinessCountry,
+  type SupplierPaymentCreated,
+} from "@senda/shared";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Env } from "../config/env.js";
 import { buildDashboard } from "../dashboard/project.js";
-import { supplierPaymentWrite } from "./supplier-payment-write.js";
+import { paymentMetadataSha256 } from "./payment-metadata.js";
 import { companyBookFromRow } from "./supabase-map.js";
 import type { BusinessStore, NewSupplierPayment } from "./types.js";
+
+const PAYMENT_ERROR = "No se pudo registrar el pago.";
+const SHA256_HEX = /^[0-9a-f]{64}$/;
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const COMPANY_COLUMNS = `
   name,
@@ -82,66 +92,120 @@ export function createSupabaseBusinessStore(
 async function insertSupplierPayment(
   client: SupabaseClient,
   input: NewSupplierPayment,
-) {
-  const write = supplierPaymentWrite(input);
-  const companyId = await companyIdOf(client);
-  const { error: paymentError } = await client.from("supplier_payments").insert({
-    id: write.payment.id,
-    company_id: companyId,
-    supplier_name: input.supplierName,
-    country: input.country,
-    amount_usd: input.amountUsd,
-    due_on: input.dueOn,
+): Promise<SupplierPaymentCreated> {
+  const metadataSha256 = paymentMetadataSha256(input);
+  const { data, error } = await client.rpc("register_supplier_payment", {
+    p_supplier_name: input.supplierName,
+    p_stellar_account: input.stellarAccount,
+    p_country: input.country,
+    p_amount_usd: input.amountUsd,
+    p_due_on: input.dueOn,
+    p_metadata_sha256: metadataSha256,
+  });
+  if (error) {
+    throw new Error(PAYMENT_ERROR, { cause: error.code });
+  }
+
+  const created = supplierPaymentFromRpc(data);
+  if (
+    created.supplierName !== input.supplierName ||
+    created.stellarAccount !== input.stellarAccount ||
+    created.country !== input.country ||
+    created.amountUsd !== input.amountUsd ||
+    created.dueOn !== input.dueOn ||
+    created.metadataSha256 !== metadataSha256
+  ) {
+    throw new Error(PAYMENT_ERROR);
+  }
+  return created;
+}
+
+/** The row pair returned by `register_supplier_payment`. */
+export function supplierPaymentFromRpc(value: unknown): SupplierPaymentCreated {
+  const body = asRecord(rpcPayload(value));
+  const payment = asRecord(body.payment);
+  const activity = asRecord(body.activity);
+  const id = requiredUuid(payment, "id");
+  const supplierName = requiredString(payment, "supplier_name");
+  const stellarAccount = requiredString(payment, "stellar_account");
+  const country = requiredCountry(payment, "country");
+  const amountUsd = requiredInteger(payment, "amount_usd");
+  const dueOn = requiredString(payment, "due_on");
+  const metadataSha256 = requiredString(payment, "metadata_sha256");
+  const createdAt = requiredString(payment, "created_at");
+  const companyId = requiredUuid(payment, "company_id");
+  const activityId = requiredUuid(activity, "id");
+
+  if (amountUsd < 1 || !DAY.test(dueOn) || !SHA256_HEX.test(metadataSha256)) fail();
+  if (payment.status !== "pending" || payment.funded_tx_hash !== null) fail();
+  if (!Number.isFinite(Date.parse(createdAt))) fail();
+  if (requiredUuid(activity, "company_id") !== companyId) fail();
+  if (requiredUuid(activity, "supplier_payment_id") !== id) fail();
+  if (activity.kind !== "supplierPayment" || activity.counterparty !== supplierName) fail();
+  if (requiredInteger(activity, "amount_usd") !== -amountUsd) fail();
+  if (activity.from_country !== "AR" || activity.to_country !== country) fail();
+  if (activity.occurred_at !== createdAt) fail();
+
+  return {
+    id,
+    supplierName,
+    stellarAccount,
+    country,
+    amountUsd,
+    dueOn,
     status: "pending",
-    stellar_account: input.stellarAccount,
-    funded_tx_hash: null,
-    metadata_sha256: write.payment.metadataSha256,
-    escrow_contract_id: null,
-    fund_tx_hash: null,
-    release_tx_hash: null,
-    created_at: write.activity.at,
-  });
-  if (paymentError) {
-    throw new Error("No se pudo registrar el pago.", { cause: paymentError.code });
-  }
-
-  const { error: activityError } = await client.from("activity_entries").insert({
-    id: write.activity.id,
-    company_id: companyId,
-    supplier_payment_id: write.payment.id,
-    kind: "supplierPayment",
-    counterparty: input.supplierName,
-    amount_usd: write.activity.amount,
-    from_country: "AR",
-    to_country: input.country,
-    occurred_at: write.activity.at,
-  });
-  if (activityError) {
-    await client.from("supplier_payments").delete().eq("id", write.payment.id);
-    throw new Error("No se pudo registrar el pago.", { cause: activityError.code });
-  }
-
-  return write.created;
+    fundedTxHash: null,
+    metadataSha256,
+    activity: {
+      id: activityId,
+      kind: "supplierPayment",
+      counterparty: supplierName,
+      amount: -amountUsd,
+      from: "AR",
+      to: country,
+      at: createdAt,
+    },
+  };
 }
 
-async function companyIdOf(client: SupabaseClient): Promise<string> {
-  const { data, error } = await client.from("companies").select("id");
-  if (error || !Array.isArray(data) || data.length !== 1) {
-    throw new Error("No se pudo registrar el pago.", { cause: error?.code });
+function rpcPayload(value: unknown): unknown {
+  if (typeof value !== "string") return value;
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    fail();
   }
-  const row: unknown = data[0];
-  if (!isIdRow(row)) {
-    throw new Error("No se pudo registrar el pago.");
-  }
-  return row.id;
 }
 
-function isIdRow(value: unknown): value is { id: string } {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    "id" in value &&
-    typeof value.id === "string" &&
-    value.id.length > 0
-  );
+function asRecord(value: unknown): Record<string, unknown> {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) fail();
+  return value as Record<string, unknown>;
+}
+
+function requiredString(row: Record<string, unknown>, key: string): string {
+  const value = row[key];
+  if (typeof value !== "string" || value.length === 0) fail();
+  return value;
+}
+
+function requiredInteger(row: Record<string, unknown>, key: string): number {
+  const value = row[key];
+  if (typeof value !== "number" || !Number.isInteger(value)) fail();
+  return value;
+}
+
+function requiredUuid(row: Record<string, unknown>, key: string): string {
+  const value = requiredString(row, key);
+  if (!UUID.test(value)) fail();
+  return value;
+}
+
+function requiredCountry(row: Record<string, unknown>, key: string): BusinessCountry {
+  const value = requiredString(row, key);
+  if ((BUSINESS_COUNTRIES as readonly string[]).includes(value)) return value as BusinessCountry;
+  fail();
+}
+
+function fail(): never {
+  throw new Error(PAYMENT_ERROR);
 }
