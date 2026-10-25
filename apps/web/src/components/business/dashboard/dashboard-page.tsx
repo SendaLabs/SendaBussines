@@ -13,10 +13,8 @@ import {
 import Image from "next/image";
 import Link from "next/link";
 
-import {
-  getDemoDashboard,
-  type DemoDashboard,
-} from "@/components/business/dashboard/demo-data";
+import type { BusinessDashboard } from "@senda/shared";
+
 import type { DashboardFilters } from "@/components/business/dashboard/filters";
 import { MobileNav } from "@/components/business/dashboard/mobile-nav";
 import {
@@ -80,11 +78,12 @@ const COUNTRY_LABELS: Record<string, string> = {
 };
 
 export function BusinessDashboardPage({
+  data,
   filters,
 }: {
+  data: BusinessDashboard;
   filters: DashboardFilters;
 }) {
-  const data = getDemoDashboard(filters);
   const sidebar = <Sidebar company={data.company} user={data.user} />;
 
   return (
@@ -153,7 +152,7 @@ export function BusinessDashboardPage({
 function Sidebar({
   company,
   user,
-}: Pick<DemoDashboard, "company" | "user">) {
+}: Pick<BusinessDashboard, "company" | "user">) {
   return (
     <div className="flex h-full flex-col px-4 pt-6 pb-4">
       <Link
@@ -244,7 +243,7 @@ function Header({
   data,
   region,
 }: {
-  data: DemoDashboard;
+  data: BusinessDashboard;
   region: DashboardFilters["region"];
 }) {
   return (
@@ -284,7 +283,7 @@ function Header({
   );
 }
 
-function KpiGrid({ data }: { data: DemoDashboard }) {
+function KpiGrid({ data }: { data: BusinessDashboard }) {
   const items = [
     {
       label: "Saldo total",
@@ -353,7 +352,7 @@ function CashFlow({
   points,
   range,
 }: {
-  points: DemoDashboard["cashFlow"];
+  points: BusinessDashboard["cashFlow"];
   range: DashboardFilters["range"];
 }) {
   const slice = range === "6" ? points.slice(-6) : points;
@@ -401,7 +400,7 @@ function CashFlow({
   );
 }
 
-function Categories({ data }: { data: DemoDashboard }) {
+function Categories({ data }: { data: BusinessDashboard }) {
   const total = data.categories.slices.reduce((sum, s) => sum + s.amount, 0) || 1;
   return (
     <Panel title="Gastos por categoría">
@@ -432,7 +431,7 @@ function Categories({ data }: { data: DemoDashboard }) {
   );
 }
 
-function Cards({ data }: { data: DemoDashboard }) {
+function Cards({ data }: { data: BusinessDashboard }) {
   return (
     <Panel title="Tarjetas corporativas">
       <div className="rounded-2xl bg-gradient-to-br from-[#1b4a43] to-[#0c241f] p-4 text-white">
@@ -452,7 +451,7 @@ function Cards({ data }: { data: DemoDashboard }) {
   );
 }
 
-function Upcoming({ data }: { data: DemoDashboard }) {
+function Upcoming({ data }: { data: BusinessDashboard }) {
   return (
     <Panel title="Próximos pagos">
       {data.upcomingPayments.length === 0 ? (
@@ -491,7 +490,7 @@ function Upcoming({ data }: { data: DemoDashboard }) {
   );
 }
 
-function Activity({ data }: { data: DemoDashboard }) {
+function Activity({ data }: { data: BusinessDashboard }) {
   return (
     <Panel title="Actividad reciente">
       {data.activity.length === 0 ? (
@@ -533,7 +532,7 @@ function Countries({
   data,
   region,
 }: {
-  data: DemoDashboard;
+  data: BusinessDashboard;
   region: DashboardFilters["region"];
 }) {
   const volumes =
