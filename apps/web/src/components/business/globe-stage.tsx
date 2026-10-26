@@ -6,7 +6,7 @@ import {
   type ReactNode,
   useEffect,
   useRef,
-  useState,
+  useSyncExternalStore,
 } from "react";
 import { useReducedMotion } from "framer-motion";
 
@@ -59,15 +59,16 @@ function GlobeFallback() {
   );
 }
 
+function subscribeToClient() {
+  return () => {};
+}
+
 export function BusinessGlobeStage({ label }: { label: string }) {
   const reduce = useReducedMotion() ?? false;
-  const [useScene, setUseScene] = useState(false);
+  const mounted = useSyncExternalStore(subscribeToClient, () => true, () => false);
+  const useScene = mounted && !reduce;
   const layerRef = useRef<HTMLDivElement>(null);
   const pillsRef = useRef<Array<HTMLSpanElement | null>>([]);
-
-  useEffect(() => {
-    setUseScene(!reduce);
-  }, [reduce]);
 
   useEffect(() => {
     if (reduce) return;

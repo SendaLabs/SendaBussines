@@ -6,7 +6,6 @@ import {
   FileText,
   House,
   Landmark,
-  LogOut,
   Receipt,
   type LucideIcon,
 } from "lucide-react";
@@ -14,16 +13,19 @@ import Image from "next/image";
 import Link from "next/link";
 
 import {
-  getDemoDashboard,
-  type DemoDashboard,
-} from "@/components/business/dashboard/demo-data";
+  supplierPaymentCanBeFunded,
+  supplierPaymentCanBeReleased,
+  type BusinessDashboard,
+  type BusinessPaymentStatus,
+} from "@senda/shared";
+
 import type { DashboardFilters } from "@/components/business/dashboard/filters";
+import { FundEscrowButton } from "@/components/business/dashboard/fund-escrow-button";
+import { LogoutButton } from "@/components/business/dashboard/logout-button";
 import { MobileNav } from "@/components/business/dashboard/mobile-nav";
-import {
-  BUSINESS_DASHBOARD_PATH,
-  BUSINESS_LOGIN_PATH,
-  BUSINESS_PATH,
-} from "@/lib/site";
+import { NewSupplierPaymentButton } from "@/components/business/dashboard/new-supplier-payment-dialog";
+import { ReleaseMilestoneButton } from "@/components/business/dashboard/release-milestone-button";
+import { BUSINESS_DASHBOARD_PATH } from "@/lib/site";
 import { cn } from "@/lib/utils";
 
 const money = new Intl.NumberFormat("es-AR", {
@@ -58,11 +60,12 @@ const CATEGORY_LABELS: Record<string, string> = {
   other: "Otros",
 };
 
-const STATUS_LABELS = {
+const STATUS_LABELS: Record<BusinessPaymentStatus, string> = {
   pending: "Pendiente",
   scheduled: "Programado",
   approved: "Aprobado",
-} as const;
+  released: "Liberado",
+};
 
 const ACTIVITY_LABELS = {
   supplierPayment: "Pago a proveedor",
@@ -80,11 +83,14 @@ const COUNTRY_LABELS: Record<string, string> = {
 };
 
 export function BusinessDashboardPage({
+  data,
   filters,
+  treasuryAccount,
 }: {
+  data: BusinessDashboard;
   filters: DashboardFilters;
+  treasuryAccount: string;
 }) {
-  const data = getDemoDashboard(filters);
   const sidebar = <Sidebar company={data.company} user={data.user} />;
 
   return (
@@ -129,7 +135,11 @@ export function BusinessDashboardPage({
             tabIndex={-1}
             className="mx-auto w-full max-w-[1520px] space-y-5 px-4 py-6 outline-none sm:px-6 lg:px-8 lg:py-8"
           >
-            <Header data={data} region={filters.region} />
+            <Header
+              data={data}
+              region={filters.region}
+              treasuryAccount={treasuryAccount}
+            />
             <KpiGrid data={data} />
 
             <div className="grid gap-5 lg:grid-cols-2 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)_minmax(0,0.8fr)]">
@@ -153,7 +163,7 @@ export function BusinessDashboardPage({
 function Sidebar({
   company,
   user,
-}: Pick<DemoDashboard, "company" | "user">) {
+}: Pick<BusinessDashboard, "company" | "user">) {
   return (
     <div className="flex h-full flex-col px-4 pt-6 pb-4">
       <Link
@@ -227,13 +237,7 @@ function Sidebar({
             <p className="truncate text-sm font-medium">{user.fullName}</p>
             <p className="text-xs text-white/60">Admin</p>
           </div>
-          <Link
-            href={BUSINESS_LOGIN_PATH}
-            aria-label="Cerrar sesión"
-            className="rounded-lg p-2 text-white/70 outline-none hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-white/40"
-          >
-            <LogOut className="size-4" />
-          </Link>
+          <LogoutButton />
         </div>
       </div>
     </div>
@@ -243,9 +247,11 @@ function Sidebar({
 function Header({
   data,
   region,
+  treasuryAccount,
 }: {
-  data: DemoDashboard;
+  data: BusinessDashboard;
   region: DashboardFilters["region"];
+  treasuryAccount: string;
 }) {
   return (
     <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -273,18 +279,13 @@ function Header({
           {data.period.from.slice(8)}/{data.period.from.slice(5, 7)} –{" "}
           {data.period.to.slice(8)}/{data.period.to.slice(5, 7)}
         </span>
-        <Link
-          href={BUSINESS_PATH}
-          className="inline-flex min-h-10 items-center rounded-full bg-forest px-4 text-sm font-medium text-cream hover:bg-forest-soft"
-        >
-          Nuevo pago
-        </Link>
+        <NewSupplierPaymentButton treasuryAccount={treasuryAccount} />
       </div>
     </div>
   );
 }
 
-function KpiGrid({ data }: { data: DemoDashboard }) {
+function KpiGrid({ data }: { data: BusinessDashboard }) {
   const items = [
     {
       label: "Saldo total",
@@ -353,7 +354,7 @@ function CashFlow({
   points,
   range,
 }: {
-  points: DemoDashboard["cashFlow"];
+  points: BusinessDashboard["cashFlow"];
   range: DashboardFilters["range"];
 }) {
   const slice = range === "6" ? points.slice(-6) : points;
@@ -401,7 +402,7 @@ function CashFlow({
   );
 }
 
-function Categories({ data }: { data: DemoDashboard }) {
+function Categories({ data }: { data: BusinessDashboard }) {
   const total = data.categories.slices.reduce((sum, s) => sum + s.amount, 0) || 1;
   return (
     <Panel title="Gastos por categoría">
@@ -432,7 +433,7 @@ function Categories({ data }: { data: DemoDashboard }) {
   );
 }
 
-function Cards({ data }: { data: DemoDashboard }) {
+function Cards({ data }: { data: BusinessDashboard }) {
   return (
     <Panel title="Tarjetas corporativas">
       <div className="rounded-2xl bg-gradient-to-br from-[#1b4a43] to-[#0c241f] p-4 text-white">
@@ -452,7 +453,7 @@ function Cards({ data }: { data: DemoDashboard }) {
   );
 }
 
-function Upcoming({ data }: { data: DemoDashboard }) {
+function Upcoming({ data }: { data: BusinessDashboard }) {
   return (
     <Panel title="Próximos pagos">
       {data.upcomingPayments.length === 0 ? (
@@ -462,27 +463,32 @@ function Upcoming({ data }: { data: DemoDashboard }) {
       ) : (
         <ul className="divide-y divide-stone/70">
           {data.upcomingPayments.map((payment) => (
-            <li
-              key={payment.id}
-              className="flex items-center justify-between gap-3 py-3 text-sm"
-            >
-              <div className="min-w-0">
-                <p className="truncate font-medium text-charcoal">
-                  {payment.supplier}
-                </p>
-                <p className="text-xs text-charcoal/50">
-                  {payment.dueDate === data.today ? "Hoy" : payment.dueDate} ·{" "}
-                  {COUNTRY_LABELS[payment.country]}
-                </p>
+            <li key={payment.id} className="py-3 text-sm">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate font-medium text-charcoal">
+                    {payment.supplier}
+                  </p>
+                  <p className="text-xs text-charcoal/50">
+                    {payment.dueDate === data.today ? "Hoy" : payment.dueDate} ·{" "}
+                    {COUNTRY_LABELS[payment.country]}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="font-medium text-forest">
+                    {money.format(payment.amount)}
+                  </p>
+                  <p className="text-xs text-charcoal/50">
+                    {STATUS_LABELS[payment.status]}
+                  </p>
+                </div>
               </div>
-              <div className="text-right">
-                <p className="font-medium text-forest">
-                  {money.format(payment.amount)}
-                </p>
-                <p className="text-xs text-charcoal/50">
-                  {STATUS_LABELS[payment.status]}
-                </p>
-              </div>
+              {supplierPaymentCanBeFunded(payment) ? (
+                <FundEscrowButton paymentId={payment.id} />
+              ) : null}
+              {supplierPaymentCanBeReleased(payment) ? (
+                <ReleaseMilestoneButton paymentId={payment.id} />
+              ) : null}
             </li>
           ))}
         </ul>
@@ -491,7 +497,7 @@ function Upcoming({ data }: { data: DemoDashboard }) {
   );
 }
 
-function Activity({ data }: { data: DemoDashboard }) {
+function Activity({ data }: { data: BusinessDashboard }) {
   return (
     <Panel title="Actividad reciente">
       {data.activity.length === 0 ? (
@@ -533,7 +539,7 @@ function Countries({
   data,
   region,
 }: {
-  data: DemoDashboard;
+  data: BusinessDashboard;
   region: DashboardFilters["region"];
 }) {
   const volumes =

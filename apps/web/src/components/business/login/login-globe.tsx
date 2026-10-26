@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { Component, type ReactNode, useEffect, useState } from "react";
+import { Component, type ReactNode, useSyncExternalStore } from "react";
 import { useReducedMotion } from "framer-motion";
 
 import type { GlobePalette } from "@/components/business/globe-scene";
@@ -44,13 +44,13 @@ function GlobeFallback() {
   );
 }
 
+function subscribeToClient() {
+  return () => {};
+}
+
 export function LoginGlobe() {
   const reduce = useReducedMotion() ?? false;
-  const [useScene, setUseScene] = useState(false);
-
-  useEffect(() => {
-    setUseScene(true);
-  }, []);
+  const useScene = useSyncExternalStore(subscribeToClient, () => true, () => false);
 
   return (
     <div
