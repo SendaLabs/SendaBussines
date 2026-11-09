@@ -2,7 +2,7 @@
 
 **Project-level expense control for SMEs in Latin America, with the project budget backed by Stellar.**
 
-Built for HackMeridian 2026 · Genesis track · aiming at Stellar Composed.
+
 
 ## Summary
 
