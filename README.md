@@ -265,9 +265,4 @@ stellar contract deploy \
 - The monthly cap is per company. Limits per project, team or category are not implemented.
 - Receipts and receipt policies are not implemented.
 
-## Useful links
 
-- [Pitch Deck](https://developers.stellar.org/docs/build/smart-contracts/getting-started/setup)
-- [Landing Page](https://developers.stellar.org/docs/tools/cli/stellar-cli)
-- [Trustless Work v2 beta API docs](https://beta.api.trustlesswork.com/docs)
-- [SCF Handbook](https://stellar.gitbook.io/scf-handbook)
