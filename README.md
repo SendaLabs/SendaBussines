@@ -6,7 +6,7 @@
 
 ## Summary
 
-Senda Business is a financial operations platform for SMEs in Latin America. For this hackathon we build one function done well: **expense control by project**.
+Senda Business is a financial operations platform for SMEs in Latin America.
 
 Each expense belongs to a project, is checked against the project's limit and receipt policy, and appears in real time with its receipt and category. The project budget is held and released through Stellar.
 
