@@ -1,6 +1,6 @@
 # Senda Business
 
-**Project-level expense control for SMEs in Latin America, with the project budget backed by Stellar.**
+** Your business is already crossing borders, your finances should work on a single platform **
 
 
 
