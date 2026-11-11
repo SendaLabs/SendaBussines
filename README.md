@@ -76,6 +76,17 @@ Privacy: the public ledger copy is generic (`Cuenta por pagar` / `Pago`). The su
 pending ──fund──▶ approved ──release──▶ released
 ```
 
+### Testnet escrow
+
+One completed Trustless Work v2 multi-release escrow on Stellar testnet, funded with testnet USDC (issuer `GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5`). The three transactions succeeded on 26 October 2026 and were signed by `GCNHPH5ADYHT2CNED26D7CTDALQOB3CD32J4AOZXFSGQ7LPT5QBAH5P5`. The release sent 9.97 USDC to `GBT6M2N6VW5ZU6F765MCZDZG5GB5BOTUNFAGSVUV6E2N4IPHSDQVO2TO` and 0.03 USDC to `GDDL743M3SOW6GN4HOAKU5ACA7QN36ERFBXNHY5BS7HOR2DPOSGMRCYF`.
+
+| Step | Hash / ID | Stellar Expert |
+| --- | --- | --- |
+| Escrow contract (multi-release v2) | `CDTGDYYYL2FGQODPMEB3RLADJGIY7C77BESFA5MQN6YVWLV27LLL2P2T` | [Contract](https://stellar.expert/explorer/testnet/contract/CDTGDYYYL2FGQODPMEB3RLADJGIY7C77BESFA5MQN6YVWLV27LLL2P2T) |
+| Deploy | `8105eff34750577ac5fac4ddc9145d3223b7bc4a2967a41a70f876001f37dfbe` | [Transaction](https://stellar.expert/explorer/testnet/tx/8105eff34750577ac5fac4ddc9145d3223b7bc4a2967a41a70f876001f37dfbe) |
+| Funding (10 USDC) | `85f1ab768c9813e8cc38d290a8153487e0eea5136acd5d5d435fc7faab30d8c6` | [Transaction](https://stellar.expert/explorer/testnet/tx/85f1ab768c9813e8cc38d290a8153487e0eea5136acd5d5d435fc7faab30d8c6) |
+| Release to the supplier | `367115d1d0e51896c8acb47dc0a113df0e8ae1a58fe26538ccc7b9bc2050cc83` | [Transaction](https://stellar.expert/explorer/testnet/tx/367115d1d0e51896c8acb47dc0a113df0e8ae1a58fe26538ccc7b9bc2050cc83) |
+
 ## Architecture
 
 ```text
