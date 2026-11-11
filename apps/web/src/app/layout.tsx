@@ -18,7 +18,7 @@ export const metadata: Metadata = {
     template: "%s — Senda Business",
   },
   description:
-    "Gestión de gastos, cuentas a pagar, pagos transfronterizos y tarjetas corporativas para tu empresa.",
+    "Gestión de gastos, cuentas a pagar y pagos transfronterizos para tu empresa.",
   icons: {
     icon: "/images/favicon.png",
   },

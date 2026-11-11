@@ -155,6 +155,49 @@ export function createSupabaseBusinessStore(
         .not("funding_claimed_at", "is", null);
       if (error) throw new Error("No se pudo reservar el pago.", { cause: error.code });
     },
+    async claimSupplierRelease(id) {
+      const { data, error } = await client
+        .from("supplier_payments")
+        .update({ release_claimed_at: new Date().toISOString() })
+        .eq("id", id)
+        .eq("status", "approved")
+        .not("escrow_contract_id", "is", null)
+        .is("release_tx_hash", null)
+        .is("release_claimed_at", null)
+        .select(PAYMENT_COLUMNS);
+      if (error) throw new Error("No se pudo reservar el hito.", { cause: error.code });
+      if (!Array.isArray(data) || data.length !== 1) return null;
+      return storedPaymentFromRow(asRow(data[0]));
+    },
+    async clearSupplierRelease(id) {
+      const { error } = await client
+        .from("supplier_payments")
+        .update({ release_claimed_at: null })
+        .eq("id", id)
+        .eq("status", "approved")
+        .not("release_claimed_at", "is", null);
+      if (error) throw new Error("No se pudo reservar el hito.", { cause: error.code });
+    },
+    async rememberSep10Nonce(nonce) {
+      const { error } = await client.from("sep10_nonces").insert({
+        nonce: nonce.nonce,
+        account: nonce.account,
+        expires_at: nonce.expiresAt,
+      });
+      if (error) throw new Error("No se pudo guardar el ingreso.", { cause: error.code });
+    },
+    async consumeSep10Nonce(nonce, account, now) {
+      const { data, error } = await client
+        .from("sep10_nonces")
+        .update({ used_at: now.toISOString() })
+        .eq("nonce", nonce)
+        .eq("account", account)
+        .is("used_at", null)
+        .gt("expires_at", now.toISOString())
+        .select("nonce");
+      if (error) return false;
+      return Array.isArray(data) && data.length === 1;
+    },
     async saveDeployedEscrow(id, escrowContractId) {
       const { data, error } = await client
         .from("supplier_payments")
@@ -259,11 +302,13 @@ export function createSupabaseBusinessStore(
         .update({
           status: "released",
           release_tx_hash: released.releaseTxHash,
+          release_claimed_at: null,
         })
         .eq("id", id)
         .eq("status", "approved")
         .not("escrow_contract_id", "is", null)
         .is("release_tx_hash", null)
+        .not("release_claimed_at", "is", null)
         .select("id");
       if (error || !Array.isArray(data) || data.length !== 1) {
         throw new Error("No se pudo registrar la liberación.", { cause: error?.code });
@@ -287,6 +332,7 @@ const PAYMENT_COLUMNS = `
   release_tx_hash,
   funded_at,
   funding_claimed_at,
+  release_claimed_at,
   deploy_tx_hash,
   pending_fund_tx_hash
 `;

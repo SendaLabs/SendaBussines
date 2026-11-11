@@ -13,7 +13,12 @@ import {
 import { loadEnv } from "../config/env.js";
 import { createTrustlessWorkClientFromEnv, TrustlessWorkClient } from "./client.js";
 import { USDC_TESTNET_ISSUER } from "./constants.js";
-import { EscrowClientError, SIGN_FAILED, TRUSTLINE_REJECTED } from "./errors.js";
+import {
+  EscrowClientError,
+  SIGN_FAILED,
+  TRUSTLESS_KEY_MISSING,
+  TRUSTLINE_REJECTED,
+} from "./errors.js";
 
 const SUPPLIER_NAME = "Molinos del Sur";
 const COUNTRY = "Paraguay";
@@ -334,7 +339,7 @@ describe("Trustless Work client", () => {
       SUPABASE_URL: "http://127.0.0.1:54321",
       SUPABASE_SECRET_KEY: "test-only-not-a-real-key",
       SESSION_SECRET: "senda-business-session-secret-32",
-      TRUSTLESS_WORK_API_KEY: "",
+      TRUSTLESS_WORK_API_KEY: "test-key",
       TREASURY_SECRET: treasury.secret(),
       STELLAR_ADMIN_PUBLIC: treasury.publicKey(),
       SEP10_SIGNING_SECRET: Keypair.random().secret(),
@@ -646,6 +651,36 @@ describe("Trustless Work client", () => {
       (error: unknown) => error instanceof EscrowClientError && error.statusCode === 502,
     );
     assert.equal(calls.length, 0);
+  });
+
+  it("does not call Trustless when the api key is missing", async () => {
+    const treasury = Keypair.random();
+    let called = false;
+    const client = new TrustlessWorkClient({
+      apiKey: "  ",
+      treasurySecret: treasury.secret(),
+      adminPublicKey: treasury.publicKey(),
+      escrowAdminPublicKey: Keypair.random().publicKey(),
+      disputeResolverPublicKey: Keypair.random().publicKey(),
+      fetchImpl: async () => {
+        called = true;
+        return json(401, {});
+      },
+    });
+
+    await assert.rejects(
+      () =>
+        client.deploy({
+          engagementId: ENGAGEMENT_ID,
+          amount: 500,
+          receiver: Keypair.random().publicKey(),
+        }),
+      (error: unknown) =>
+        error instanceof EscrowClientError &&
+        error.statusCode === 500 &&
+        error.message === TRUSTLESS_KEY_MISSING,
+    );
+    assert.equal(called, false);
   });
 });
 

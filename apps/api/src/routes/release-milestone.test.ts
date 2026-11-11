@@ -43,7 +43,12 @@ class FakeReleaseEscrow implements EscrowReleaseClient {
     throw new Error("release tests do not fund");
   }
 
+  releaseGate: Promise<void> | null = null;
+  onReleaseEntered: (() => void) | null = null;
+
   async approveAndRelease(input: ReleaseEscrowInput): Promise<EscrowRecord> {
+    this.onReleaseEntered?.();
+    if (this.releaseGate) await this.releaseGate;
     this.releases.push({ ...input });
     if (this.error) throw this.error;
     return {
@@ -94,6 +99,7 @@ function approvedRow(
     releaseTxHash: null,
     fundedAt: "2026-10-25T12:00:00.000Z",
     fundingClaimedAt: null,
+    releaseClaimedAt: null,
     deployTxHash: null,
     pendingFundTxHash: null,
     ...patch,
@@ -282,6 +288,7 @@ test("a network failure leaves the payment approved and out of the release hash"
     const stored = store.readSupplierPayment("pay-ready");
     assert.equal(stored?.status, "approved");
     assert.equal(stored?.releaseTxHash, null);
+    assert.equal(stored?.releaseClaimedAt, null);
     assert.equal(stored?.escrowContractId, CONTRACT_ID);
     const after = await readDashboard(app, token);
     assert.deepEqual(after.kpis.payable, before.kpis.payable);
@@ -300,5 +307,42 @@ test("an unconfirmed release does not mark the payment released", async () => {
     const stored = store.readSupplierPayment("pay-ready");
     assert.equal(stored?.status, "approved");
     assert.equal(stored?.releaseTxHash, null);
+    assert.equal(stored?.releaseClaimedAt, null);
+  }, (supplier) => [approvedRow("pay-ready", supplier, 100)]);
+});
+
+test("two overlapping release calls submit once", async () => {
+  await withReleaseApi(async ({ app, token, escrow, store }) => {
+    let openGate: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      openGate = resolve;
+    });
+    let entered: () => void = () => undefined;
+    const enteredPromise = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    escrow.releaseGate = gate;
+    escrow.onReleaseEntered = () => entered();
+
+    const firstPromise = releasePayment(app, "pay-ready", token);
+    await enteredPromise;
+    const held = store.readSupplierPayment("pay-ready");
+    assert.equal(held?.status, "approved");
+    assert.notEqual(held?.releaseClaimedAt, null);
+    assert.equal(escrow.releases.length, 0);
+
+    const second = await releasePayment(app, "pay-ready", token);
+    assert.equal(second.statusCode, 409);
+    assert.deepEqual(second.json(), { error: "Ese hito ya se está liberando." });
+    assert.equal(escrow.releases.length, 0);
+
+    openGate();
+    const first = await firstPromise;
+    assert.equal(first.statusCode, 200);
+    assert.equal(escrow.releases.length, 1);
+    const stored = store.readSupplierPayment("pay-ready");
+    assert.equal(stored?.status, "released");
+    assert.equal(stored?.releaseTxHash, RELEASE_HASH);
+    assert.equal(stored?.releaseClaimedAt, null);
   }, (supplier) => [approvedRow("pay-ready", supplier, 100)]);
 });

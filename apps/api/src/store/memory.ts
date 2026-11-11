@@ -1,5 +1,5 @@
 import { buildDashboard } from "../dashboard/project.js";
-import { DEMO_BOOK } from "./seed.js";
+import { emptyCompanyBook } from "./seed.js";
 import { supplierPaymentWrite } from "./supplier-payment-write.js";
 import type {
   BusinessStore,
@@ -41,6 +41,29 @@ function releaseFunding(state: CompanyBook, id: string): void {
   const payment = state.payments.find((item) => item.id === id);
   if (!payment || payment.status !== "pending" || payment.fundingClaimedAt == null) return;
   payment.fundingClaimedAt = null;
+}
+
+function claimRelease(state: CompanyBook, id: string): StoredSupplierPayment | null {
+  const payment = state.payments.find((item) => item.id === id);
+  const contractId = payment?.escrowContractId?.trim() ?? "";
+  const existingRelease = payment?.releaseTxHash?.trim() ?? "";
+  if (
+    !payment ||
+    payment.status !== "approved" ||
+    contractId.length === 0 ||
+    existingRelease.length > 0 ||
+    payment.releaseClaimedAt != null
+  ) {
+    return null;
+  }
+  payment.releaseClaimedAt = new Date().toISOString();
+  return copyPayment(payment);
+}
+
+function clearRelease(state: CompanyBook, id: string): void {
+  const payment = state.payments.find((item) => item.id === id);
+  if (!payment || payment.status !== "approved" || payment.releaseClaimedAt == null) return;
+  payment.releaseClaimedAt = null;
 }
 
 function heldPayment(state: CompanyBook, id: string): StoredSupplierPayment | null {
@@ -107,7 +130,9 @@ function nonceRecordIsFree(nonces: Map<string, Sep10Nonce>, nonce: string, now: 
   return Number.isFinite(expiresAt) && expiresAt > now.getTime();
 }
 
-export function createMemoryBusinessStore(book: CompanyBook = DEMO_BOOK): MemoryBusinessStore {
+export function createMemoryBusinessStore(
+  book: CompanyBook = emptyCompanyBook(),
+): MemoryBusinessStore {
   const state = structuredClone(book);
   const nonces = new Map<string, Sep10Nonce>();
 
@@ -162,6 +187,24 @@ export function createMemoryBusinessStore(book: CompanyBook = DEMO_BOOK): Memory
       releaseFunding(state, id);
       return Promise.resolve();
     },
+    claimSupplierRelease(id) {
+      return Promise.resolve(claimRelease(state, id));
+    },
+    clearSupplierRelease(id) {
+      clearRelease(state, id);
+      return Promise.resolve();
+    },
+    async rememberSep10Nonce(nonce) {
+      this.rememberNonce(nonce);
+    },
+    async consumeSep10Nonce(nonce, account, now) {
+      const record = nonces.get(nonce);
+      if (!record || record.account !== account || record.usedAt !== null) return false;
+      const expiresAt = Date.parse(record.expiresAt);
+      if (!Number.isFinite(expiresAt) || expiresAt <= now.getTime()) return false;
+      record.usedAt = now.toISOString();
+      return true;
+    },
     saveDeployedEscrow(id, escrowContractId) {
       return Promise.resolve(persistDeployedEscrow(state, id, escrowContractId));
     },
@@ -199,12 +242,14 @@ export function createMemoryBusinessStore(book: CompanyBook = DEMO_BOOK): Memory
         !payment ||
         payment.status !== "approved" ||
         contractId.length === 0 ||
-        existingRelease.length > 0
+        existingRelease.length > 0 ||
+        payment.releaseClaimedAt == null
       ) {
         throw new Error("No se pudo registrar la liberación.");
       }
       payment.status = "released";
       payment.releaseTxHash = released.releaseTxHash;
+      payment.releaseClaimedAt = null;
     },
     rememberNonce(nonce) {
       if (nonce.nonce.length === 0) {

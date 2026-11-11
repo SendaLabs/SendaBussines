@@ -48,7 +48,7 @@ export function NewSupplierPaymentButton({
   const [dueOn, setDueOn] = useState("");
   const [errors, setErrors] = useState<Partial<Record<SupplierPaymentField, string>>>({});
   const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
+  const [phase, setPhase] = useState<"idle" | "checking" | "saving">("idle");
 
   const nameId = `${titleId}-name`;
   const accountId = `${titleId}-account`;
@@ -65,7 +65,7 @@ export function NewSupplierPaymentButton({
     setDueOn("");
     setErrors({});
     setError(null);
-    setPending(false);
+    setPhase("idle");
     const dialog = dialogRef.current;
     if (!dialog) return;
     if (!dialog.open) dialog.showModal();
@@ -76,13 +76,19 @@ export function NewSupplierPaymentButton({
     dialogRef.current?.close();
   }
 
+  function editField(field: SupplierPaymentField, apply: () => void) {
+    apply();
+    setErrors((current) => ({ ...current, [field]: undefined }));
+    setError(null);
+  }
+
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (pending) return;
+    if (phase !== "idle") return;
     const session = formSession.current;
     const current = ++requestId.current;
     setError(null);
-    setPending(true);
+    setPhase("checking");
 
     try {
       const { StrKey } = await import("@stellar/stellar-sdk");
@@ -111,6 +117,8 @@ export function NewSupplierPaymentButton({
         return;
       }
       setErrors({});
+      if (formSession.current !== session || requestId.current !== current) return;
+      setPhase("saving");
 
       const response = await fetch(SUPPLIER_PAYMENTS_URL, {
         method: "POST",
@@ -134,7 +142,7 @@ export function NewSupplierPaymentButton({
         setError(SAVE_FAILED);
       }
     } finally {
-      if (requestId.current === current) setPending(false);
+      if (requestId.current === current) setPhase("idle");
     }
   }
 
@@ -173,7 +181,9 @@ export function NewSupplierPaymentButton({
                 type="text"
                 autoComplete="organization"
                 value={supplierName}
-                onChange={(event) => setSupplierName(event.target.value)}
+                onChange={(event) =>
+                  editField("supplierName", () => setSupplierName(event.target.value))
+                }
                 aria-invalid={errors.supplierName ? true : undefined}
                 aria-describedby={errors.supplierName ? `${nameId}-error` : undefined}
                 className={controlClass(Boolean(errors.supplierName))}
@@ -187,7 +197,9 @@ export function NewSupplierPaymentButton({
                 autoComplete="off"
                 spellCheck={false}
                 value={stellarAccount}
-                onChange={(event) => setStellarAccount(event.target.value)}
+                onChange={(event) =>
+                  editField("stellarAccount", () => setStellarAccount(event.target.value))
+                }
                 aria-invalid={errors.stellarAccount ? true : undefined}
                 aria-describedby={errors.stellarAccount ? `${accountId}-error` : undefined}
                 className={cn(controlClass(Boolean(errors.stellarAccount)), "font-mono text-sm")}
@@ -198,7 +210,7 @@ export function NewSupplierPaymentButton({
                 id={countryId}
                 name="country"
                 value={country}
-                onChange={(event) => setCountry(event.target.value)}
+                onChange={(event) => editField("country", () => setCountry(event.target.value))}
                 aria-invalid={errors.country ? true : undefined}
                 aria-describedby={errors.country ? `${countryId}-error` : undefined}
                 className={controlClass(Boolean(errors.country))}
@@ -219,7 +231,7 @@ export function NewSupplierPaymentButton({
                 inputMode="numeric"
                 autoComplete="off"
                 value={amount}
-                onChange={(event) => setAmount(event.target.value)}
+                onChange={(event) => editField("amountUsd", () => setAmount(event.target.value))}
                 aria-invalid={errors.amountUsd ? true : undefined}
                 aria-describedby={errors.amountUsd ? `${amountId}-error` : undefined}
                 className={controlClass(Boolean(errors.amountUsd))}
@@ -231,7 +243,7 @@ export function NewSupplierPaymentButton({
                 name="dueOn"
                 type="date"
                 value={dueOn}
-                onChange={(event) => setDueOn(event.target.value)}
+                onChange={(event) => editField("dueOn", () => setDueOn(event.target.value))}
                 aria-invalid={errors.dueOn ? true : undefined}
                 aria-describedby={errors.dueOn ? `${dueId}-error` : undefined}
                 className={controlClass(Boolean(errors.dueOn))}
@@ -248,11 +260,11 @@ export function NewSupplierPaymentButton({
             </button>
             <button
               type="submit"
-              disabled={pending}
-              aria-busy={pending || undefined}
+              disabled={phase !== "idle"}
+              aria-busy={phase !== "idle" || undefined}
               className="inline-flex min-h-10 items-center rounded-full bg-forest px-4 text-sm font-medium text-cream outline-none hover:bg-forest-soft focus-visible:ring-2 focus-visible:ring-forest/40 disabled:cursor-wait disabled:opacity-60"
             >
-              {pending ? "Registrando…" : "Registrar pago"}
+              {phase === "saving" ? "Registrando…" : phase === "checking" ? "Revisando…" : "Registrar pago"}
             </button>
           </div>
         </form>

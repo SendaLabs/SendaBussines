@@ -73,7 +73,9 @@ export function buildDashboard(
         byListedOrder<BusinessCountry>(BUSINESS_COUNTRIES, b.country),
     );
 
-  const payable = book.payments.filter(isPayable);
+  const payable = book.payments.filter(
+    (payment) => inRegion(payment.country) && isPayable(payment),
+  );
 
   return {
     today: calendarDateInBuenosAires(now),

@@ -12,12 +12,13 @@ function unfunded(
     releaseTxHash: null,
     fundedAt: null,
     fundingClaimedAt: null,
+    releaseClaimedAt: null,
     deployTxHash: null,
     pendingFundTxHash: null,
   };
 }
 
-/** Same figures as the SQL seed. Payable is 10325 across 5. The monthly cap is 50000. */
+/** Fixture for escrow tests. The running memory store starts empty. */
 export const DEMO_BOOK: CompanyBook = {
   monthlyCapUsd: 50_000,
   company: { name: "Empresa Demo S.R.L.", countries: 4 },
@@ -166,3 +167,25 @@ export const DEMO_BOOK: CompanyBook = {
     { country: "ES", amount: 33_000 },
   ],
 };
+
+/** No company, no payments, no snapshot figures. The monthly cap is product config. */
+export function emptyCompanyBook(): CompanyBook {
+  return {
+    monthlyCapUsd: 50_000,
+    company: { name: "", countries: 0 },
+    user: { firstName: "", fullName: "", avatar: "" },
+    period: { from: "", to: "" },
+    balance: { value: 0, change: 0 },
+    spend: { value: 0, change: 0 },
+    international: { value: 0, payments: 0 },
+    payments: [],
+    activity: [],
+    cashFlow: [],
+    categories: {
+      current: { month: "", slices: [] },
+      previous: { month: "", slices: [] },
+    },
+    cards: { last4: "", currency: "USD", active: 0, total: 0 },
+    countryVolumes: [],
+  };
+}

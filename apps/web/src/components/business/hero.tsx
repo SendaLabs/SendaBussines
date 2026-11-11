@@ -1,14 +1,6 @@
-import {
-  ArrowRight,
-  CreditCard,
-  Globe2,
-  Mail,
-  Shield,
-  Zap,
-} from "lucide-react";
+import { ArrowRight, Globe2, Mail, Shield, Zap } from "lucide-react";
 import Link from "next/link";
 
-import { BusinessHeroStage } from "@/components/business/hero-stage";
 import { Shell } from "@/components/shell";
 import { Button } from "@/components/ui/button";
 import { BUSINESS_LOGIN_PATH, getBusinessMailto } from "@/lib/site";
@@ -23,11 +15,6 @@ const pillars = [
     title: "Pagos más simples",
     copy: "Automatizá pagos masivos y ahorrá tiempo.",
     icon: Zap,
-  },
-  {
-    title: "Tarjetas corporativas",
-    copy: "Físicas y virtuales, con control total desde un solo lugar.",
-    icon: CreditCard,
   },
   {
     title: "Alcance global",
@@ -49,7 +36,7 @@ export function BusinessHero() {
           aria-hidden
         />
 
-        <Shell className="relative z-10 grid items-center gap-12 py-16 lg:grid-cols-[32rem_minmax(0,1fr)] lg:gap-4 lg:py-[4.5rem]">
+        <Shell className="relative z-10 py-16 lg:py-[4.5rem]">
           <div>
             <p className="inline-flex rounded-full border border-white/15 bg-white/8 px-3.5 py-1 text-[0.68rem] tracking-[0.2em] text-white/75 uppercase">
               Senda Business
@@ -58,14 +45,14 @@ export function BusinessHero() {
               El poder de Senda, ahora para tu empresa.
             </h1>
             <p className="mt-5 max-w-[48ch] text-base leading-relaxed text-white/70 md:text-lg">
-              Gestión de gastos, cuentas a pagar, pagos transfronterizos y
-              tarjetas corporativas, construido como una única plataforma. Una
-              cuenta, un panel de control, una fuente de verdad para cada país
-              en el que operes.
+              Gestión de gastos, cuentas a pagar y pagos transfronterizos,
+              construido como una única plataforma. Una cuenta, un panel de
+              control, una fuente de verdad para cada país en el que operes.
             </p>
             <div className="mt-8 flex flex-col items-start gap-3 sm:flex-row sm:flex-nowrap">
               <a href={getBusinessMailto()}>
                 <Button
+                  as="span"
                   variant="cream"
                   size="md"
                   className="min-h-11 px-5 text-[0.95rem]"
@@ -76,6 +63,7 @@ export function BusinessHero() {
               </a>
               <Link href={BUSINESS_LOGIN_PATH}>
                 <Button
+                  as="span"
                   variant="ghostForest"
                   size="md"
                   className="min-h-11 px-5 text-[0.95rem]"
@@ -86,13 +74,11 @@ export function BusinessHero() {
               </Link>
             </div>
           </div>
-
-          <BusinessHeroStage />
         </Shell>
       </div>
 
       <div id="pilares" className="bg-white">
-        <Shell className="grid grid-cols-2 gap-x-6 gap-y-10 py-12 lg:grid-cols-4 lg:gap-8 lg:py-14">
+        <Shell className="grid grid-cols-2 gap-x-6 gap-y-10 py-12 lg:grid-cols-3 lg:gap-8 lg:py-14">
           {pillars.map((pillar) => {
             const Icon = pillar.icon;
             return (

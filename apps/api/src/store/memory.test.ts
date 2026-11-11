@@ -11,14 +11,6 @@ const FILTERS: BusinessDashboardFilters = {
   categoryPeriod: "current",
 };
 
-const SEED_PAYMENT_IDS = [
-  "pay-nube-austral",
-  "pay-rios",
-  "pay-pixel",
-  "pay-pacifico",
-  "pay-norte",
-];
-
 const NEW_PAYMENT = {
   supplierName: "Taller Norte",
   stellarAccount: `G${"A".repeat(55)}`,
@@ -33,25 +25,19 @@ function canonicalDigest(detail: typeof NEW_PAYMENT): string {
   return createHash("sha256").update(canonical, "utf8").digest("hex");
 }
 
-test("the seeded company cap is 50000", async () => {
+test("an empty book keeps the monthly cap and has no payments", async () => {
   const store = createMemoryBusinessStore();
   const dashboard = await store.getDashboard(FILTERS);
 
   assert.equal(store.monthlyCapUsd(), 50000);
   assert.deepEqual(Object.keys(dashboard.company).sort(), ["countries", "name"]);
-  assert.equal(dashboard.kpis.balance.value, 248420);
-  assert.equal(dashboard.kpis.spend.value, 18290);
-  assert.equal(dashboard.kpis.international.value, 72640);
-  assert.deepEqual(dashboard.kpis.payable, { value: 10325, invoices: 5 });
-
-  for (const id of SEED_PAYMENT_IDS) {
-    const payment = store.readSupplierPayment(id);
-    assert.equal(payment?.metadataSha256, null);
-    assert.equal(payment?.fundTxHash, null);
-    assert.equal(payment?.escrowContractId, null);
-    assert.equal(payment?.fundedAt, null);
-    assert.equal(payment?.releaseTxHash, null);
-  }
+  assert.equal(dashboard.company.name, "");
+  assert.equal(dashboard.kpis.balance.value, 0);
+  assert.equal(dashboard.kpis.spend.value, 0);
+  assert.equal(dashboard.kpis.international.value, 0);
+  assert.deepEqual(dashboard.kpis.payable, { value: 0, invoices: 0 });
+  assert.equal(dashboard.upcomingPayments.length, 0);
+  assert.equal(dashboard.activity.length, 0);
 });
 
 test("a new payment stores a 64-hex sha256 and reads it back", async () => {
@@ -75,17 +61,17 @@ test("a new payment stores a 64-hex sha256 and reads it back", async () => {
   assert.equal(milestone.description, "Pago");
   assert.equal(milestone.engagementId, created.id);
   assert.equal(JSON.stringify(milestone).includes("Taller Norte"), false);
-  assert.equal(dashboard.kpis.balance.value, 248420);
-  assert.equal(dashboard.kpis.spend.value, 18290);
-  assert.equal(dashboard.kpis.international.value, 72640);
-  assert.deepEqual(dashboard.kpis.payable, { value: 10425, invoices: 6 });
+  assert.equal(dashboard.kpis.balance.value, 0);
+  assert.equal(dashboard.kpis.spend.value, 0);
+  assert.equal(dashboard.kpis.international.value, 0);
+  assert.deepEqual(dashboard.kpis.payable, { value: 100, invoices: 1 });
   assert.equal(dashboard.activity[0]?.kind, "supplierPayment");
   assert.equal(dashboard.activity[0]?.counterparty, "Taller Norte");
   assert.equal(dashboard.activity[0]?.amount, -100);
   assert.equal(dashboard.activity[0]?.from, "AR");
   assert.equal(dashboard.activity[0]?.to, "AR");
-  assert.equal(dashboard.cashFlow.length, 12);
-  assert.equal(dashboard.countryVolumes.length, 4);
+  assert.equal(dashboard.cashFlow.length, 0);
+  assert.equal(dashboard.countryVolumes.length, 0);
 });
 
 test("a funding claim is a synchronous check-and-set and does not replace a contract id", async () => {

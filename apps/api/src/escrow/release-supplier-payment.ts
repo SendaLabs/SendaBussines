@@ -21,6 +21,7 @@ export type ReleaseSupplierMilestoneResult = {
 const NOT_FOUND = "No encontramos ese pago.";
 const NO_DEPOSIT = "Este pago no tiene un depósito para liberar.";
 const ALREADY_RELEASED = "Este hito ya fue liberado.";
+const IN_PROGRESS = "Ese hito ya se está liberando.";
 
 export async function releaseSupplierMilestone(input: {
   paymentId: string;
@@ -32,11 +33,17 @@ export async function releaseSupplierMilestone(input: {
 
   const contractId = payment.escrowContractId?.trim() ?? "";
   const existingRelease = payment.releaseTxHash?.trim() ?? "";
-  if (existingRelease.length > 0) return fail(409, ALREADY_RELEASED);
+  if (existingRelease.length > 0 || payment.status === "released") {
+    return fail(409, ALREADY_RELEASED);
+  }
   if (payment.status !== "approved" || contractId.length === 0) {
     return fail(409, NO_DEPOSIT);
   }
 
+  const claimed = await input.store.claimSupplierRelease(payment.id);
+  if (!claimed) return releaseConflict(input.store, payment.id);
+
+  let recorded = false;
   try {
     const released = await input.escrow.approveAndRelease({
       engagementId: payment.id,
@@ -49,6 +56,7 @@ export async function releaseSupplierMilestone(input: {
     }
 
     await input.store.markSupplierReleased(payment.id, { releaseTxHash });
+    recorded = true;
     return {
       statusCode: 200,
       body: {
@@ -61,7 +69,25 @@ export async function releaseSupplierMilestone(input: {
     const clientError = failureFromClient(error);
     if (clientError) return clientError;
     throw error;
+  } finally {
+    if (!recorded) await input.store.clearSupplierRelease(payment.id);
   }
+}
+
+async function releaseConflict(
+  store: BusinessStore,
+  paymentId: string,
+): Promise<ReleaseSupplierMilestoneResult> {
+  const current = await store.findSupplierPayment(paymentId);
+  if (!current) return fail(404, NOT_FOUND);
+  const existingRelease = current.releaseTxHash?.trim() ?? "";
+  if (existingRelease.length > 0 || current.status === "released") {
+    return fail(409, ALREADY_RELEASED);
+  }
+  if (current.status !== "approved" || (current.escrowContractId?.trim() ?? "").length === 0) {
+    return fail(409, NO_DEPOSIT);
+  }
+  return fail(409, IN_PROGRESS);
 }
 
 function fail(statusCode: number, error: string): ReleaseSupplierMilestoneResult {

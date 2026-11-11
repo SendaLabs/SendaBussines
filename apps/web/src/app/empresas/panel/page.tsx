@@ -8,7 +8,7 @@ import { requireBusinessSession } from "@/lib/session";
 
 export const metadata: Metadata = {
   title: "Panel",
-  description: "Demostración del panel de Senda Business con datos de ejemplo.",
+  description: "Pagos a proveedores de la empresa.",
   robots: { index: false, follow: false },
 };
 

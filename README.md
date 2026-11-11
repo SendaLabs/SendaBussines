@@ -46,7 +46,7 @@ Stellar holds and moves the money. It is not used as a data store.
 
 - **The budget is held in escrow.** Each supplier payment is locked in a Trustless Work v2 multi-release escrow funded with USDC on Stellar testnet. It reaches the supplier only when the company releases the milestone.
 - **Verifiable without exposing the business.** Funding and release produce transaction hashes, stored on each payment together with the escrow contract id. The public ledger copy is generic (`Cuenta por pagar` / `Pago`), and the supplier name and country stay off-chain. Only the SHA-256 of the payment details is stored.
-- **Wallet-based access.** The company signs in with its Stellar account through SEP-10 and Freighter.
+- **Wallet-based access.** Any Stellar account signs in through SEP-10 and Freighter.
 - **Existing ecosystem tools.** Escrow comes from Trustless Work, authentication from SEP-10 and signing from the Stellar SDK.
 
 ---
@@ -175,7 +175,7 @@ Apply the migrations in `supabase/migrations` to your Supabase project, then fil
 | `STELLAR_NETWORK`, `HORIZON_URL`, `SOROBAN_RPC_URL` | Stellar network (default testnet) |
 | `SUPABASE_URL`, `SUPABASE_SECRET_KEY` | Supabase project and service key |
 | `SESSION_SECRET` | Signs the `senda_session` cookie. At least 32 characters |
-| `STELLAR_ADMIN_PUBLIC` | The company (treasury) account. It is the only account that can sign in |
+| `STELLAR_ADMIN_PUBLIC` | The company treasury. It signs funding and release. Any Stellar account can sign in |
 | `SEP10_SIGNING_SECRET` | Server key for SEP-10 challenges. Must be a different account from `STELLAR_ADMIN_PUBLIC` |
 | `SEP10_HOME_DOMAIN` | SEP-10 home domain (default `localhost`) |
 | `TRUSTLESS_WORK_API_KEY` | Trustless Work v2 beta key |
@@ -198,7 +198,7 @@ npm run dev:api   # API on :4000
 npm run dev:web   # Web on :3000
 ```
 
-Open http://localhost:3000, sign in with the company wallet in Freighter, and go to the panel.
+Open http://localhost:3000, sign in with any Freighter wallet, and go to the panel.
 
 With Docker:
 

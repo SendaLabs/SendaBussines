@@ -20,6 +20,8 @@ export interface StoredSupplierPayment extends BusinessUpcomingPayment {
    * the check-and-set and must not deploy or fund.
    */
   fundingClaimedAt: string | null;
+  /** Set only while one request holds an approved escrow for release. */
+  releaseClaimedAt: string | null;
   /** Deploy transaction whose contract id is not known yet. */
   deployTxHash: string | null;
   /**
@@ -86,6 +88,14 @@ export interface BusinessStore {
    */
   claimSupplierFunding(id: string): Promise<StoredSupplierPayment | null>;
   releaseSupplierFunding(id: string): Promise<void>;
+  /**
+   * Check-and-set for release. Succeeds only when the payment is approved,
+   * has an escrow, has no release hash, and is not already claimed.
+   */
+  claimSupplierRelease(id: string): Promise<StoredSupplierPayment | null>;
+  clearSupplierRelease(id: string): Promise<void>;
+  rememberSep10Nonce(nonce: Omit<Sep10Nonce, "usedAt">): Promise<void>;
+  consumeSep10Nonce(nonce: string, account: string, now: Date): Promise<boolean>;
   /**
    * Persists the contract id only when it is still null. Returns false when
    * another id is already stored.

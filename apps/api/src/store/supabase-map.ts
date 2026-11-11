@@ -50,6 +50,13 @@ function requiredNumber(row: Record<string, unknown>, key: string): number {
   return parsed;
 }
 
+function textOrEmpty(row: Record<string, unknown>, key: string): string {
+  const value = row[key];
+  if (value == null) return "";
+  if (typeof value !== "string") throw new Error(`El libro no tiene ${key}.`);
+  return value;
+}
+
 function nullableString(row: Record<string, unknown>, key: string): string | null {
   const value = row[key];
   if (value == null) return null;
@@ -91,6 +98,7 @@ export function storedPaymentFromRow(payment: Record<string, unknown>): CompanyB
     releaseTxHash: nullableString(payment, "release_tx_hash"),
     fundedAt: nullableString(payment, "funded_at"),
     fundingClaimedAt: nullableString(payment, "funding_claimed_at"),
+    releaseClaimedAt: nullableString(payment, "release_claimed_at"),
     deployTxHash: nullableString(payment, "deploy_tx_hash"),
     pendingFundTxHash: nullableString(payment, "pending_fund_tx_hash"),
   };
@@ -121,10 +129,6 @@ export function companyBookFromRow(value: unknown): CompanyBook {
     });
   }
 
-  if (categories.current.slices.length === 0 || categories.previous.slices.length === 0) {
-    throw new Error("El libro no tiene los dos períodos de categorías.");
-  }
-
   return {
     monthlyCapUsd: row.monthly_cap_usd == null ? 50_000 : requiredNumber(row, "monthly_cap_usd"),
     company: {
@@ -132,9 +136,9 @@ export function companyBookFromRow(value: unknown): CompanyBook {
       countries: requiredNumber(row, "country_count"),
     },
     user: {
-      firstName: requiredString(face, "first_name"),
-      fullName: requiredString(face, "full_name"),
-      avatar: requiredString(face, "avatar_path"),
+      firstName: textOrEmpty(face, "first_name"),
+      fullName: textOrEmpty(face, "full_name"),
+      avatar: textOrEmpty(face, "avatar_path"),
     },
     period: {
       from: day(requiredString(kpi, "period_from")),
@@ -169,7 +173,7 @@ export function companyBookFromRow(value: unknown): CompanyBook {
     })),
     categories,
     cards: {
-      last4: requiredString(cards, "last4"),
+      last4: textOrEmpty(cards, "last4"),
       currency: requiredString(cards, "currency"),
       active: requiredNumber(cards, "active_count"),
       total: requiredNumber(cards, "total_count"),

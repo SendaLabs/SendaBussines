@@ -18,23 +18,25 @@ const sizes = {
 type ButtonProps = React.ComponentProps<"button"> & {
   variant?: keyof typeof variants;
   size?: keyof typeof sizes;
+  /** Use inside a link. A button nested in an anchor is invalid HTML. */
+  as?: "button" | "span";
 };
 
 export function Button({
   className,
   variant = "senda",
   size = "cta",
+  as = "button",
   ...props
 }: ButtonProps) {
-  return (
-    <button
-      className={cn(
-        "inline-flex shrink-0 items-center justify-center transition-colors outline-none select-none focus-visible:ring-3 focus-visible:ring-forest/30 disabled:pointer-events-none disabled:opacity-50",
-        variants[variant],
-        sizes[size],
-        className,
-      )}
-      {...props}
-    />
+  const classes = cn(
+    "inline-flex shrink-0 items-center justify-center transition-colors outline-none select-none focus-visible:ring-3 focus-visible:ring-forest/30 disabled:pointer-events-none disabled:opacity-50",
+    variants[variant],
+    sizes[size],
+    className,
   );
+  if (as === "span") {
+    return <span className={classes}>{props.children}</span>;
+  }
+  return <button className={classes} {...props} />;
 }

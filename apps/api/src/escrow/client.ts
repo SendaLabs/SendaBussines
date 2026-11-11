@@ -12,6 +12,7 @@ import {
 import {
   AMOUNT_INVALID,
   DEPLOY_FAILED,
+  TRUSTLESS_KEY_MISSING,
   EscrowClientError,
   FUND_AMOUNT_MISMATCH,
   FUND_FAILED,
@@ -403,6 +404,10 @@ export class TrustlessWorkClient {
     failureMessage: string,
     isSubmit = false,
   ): Promise<unknown> {
+    if (this.apiKey.trim().length === 0) {
+      throw new EscrowClientError(500, TRUSTLESS_KEY_MISSING);
+    }
+
     let response: Response;
     try {
       response = await this.fetchImpl(`${TRUSTLESS_WORK_HOST}${path}`, {
@@ -420,6 +425,9 @@ export class TrustlessWorkClient {
     const body = await readJson(response);
     if (response.ok) return body;
 
+    if (response.status === 401) {
+      throw new EscrowClientError(502, TRUSTLESS_KEY_MISSING);
+    }
     if (response.status === 422 && isTrustline(body)) {
       throw new EscrowClientError(422, TRUSTLINE_REJECTED);
     }

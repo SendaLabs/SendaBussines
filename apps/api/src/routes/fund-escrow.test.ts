@@ -179,6 +179,7 @@ function pendingRow(
     releaseTxHash: null,
     fundedAt: null,
     fundingClaimedAt: null,
+    releaseClaimedAt: null,
     deployTxHash: null,
     pendingFundTxHash: null,
     ...patch,

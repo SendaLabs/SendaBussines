@@ -31,7 +31,7 @@ export async function buildApp(
 
   await app.register(healthRoutes);
   await app.register(stellarRoutes(env));
-  await app.register(businessAuthRoutes(env));
+  await app.register(businessAuthRoutes(env, store));
   await app.register(businessRoutes(env, store, escrow));
 
   return app;

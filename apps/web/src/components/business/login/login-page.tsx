@@ -50,7 +50,7 @@ export function BusinessLoginPage() {
           </p>
           <p className="mt-5 hidden max-w-[36ch] text-[0.95rem] leading-relaxed text-white/75 sm:block">
             Gestioná tu operación financiera global desde un solo lugar. Pagos,
-            gastos, cuentas y tarjetas, en todos los países donde operes.
+            gastos y cuentas, en todos los países donde operes.
           </p>
         </div>
 

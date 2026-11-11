@@ -18,7 +18,7 @@ export function BusinessGlobeSection() {
             controlar cada transacción, cada presupuesto, cada mercado.
           </p>
           <a href={getBusinessMailto()} className="mt-8 inline-flex">
-            <Button variant="senda" size="cta">
+            <Button as="span" variant="senda" size="cta">
               Solicitar ahora
             </Button>
           </a>

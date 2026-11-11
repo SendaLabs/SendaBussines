@@ -3,6 +3,11 @@ type NonceRecord = {
   expiresAt: number;
 };
 
+export interface NonceStore {
+  remember(nonce: string, account: string, expiresAt: number, now?: number): void | Promise<void>;
+  consume(nonce: string, account: string, now?: number): boolean | Promise<boolean>;
+}
+
 export function createNonceStore() {
   const entries = new Map<string, NonceRecord>();
 
@@ -22,4 +27,3 @@ export function createNonceStore() {
   };
 }
 
-export type NonceStore = ReturnType<typeof createNonceStore>;

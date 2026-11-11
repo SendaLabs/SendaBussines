@@ -83,77 +83,52 @@ test("a cookie that is not a valid session is 401", async () => {
   assert.equal(stale.statusCode, 401);
 });
 
-test("global range 12 returns the full seeded book", async () => {
+test("an empty book has no payments and zero snapshots", async () => {
   const body = dashboardOf(await getDashboard("region=global&range=12"));
   assert.equal(body.today, calendarDateInBuenosAires(new Date()));
-  assert.equal(body.company.name, "Empresa Demo S.R.L.");
-  assert.equal(body.company.countries, 4);
-  assert.equal(body.user.firstName, "Delfina");
-  assert.equal(body.kpis.balance.value, 248420);
-  assert.equal(body.kpis.balance.change, 0.084);
-  assert.deepEqual(body.kpis.payable, { value: 10325, invoices: 5 });
-  assert.equal(body.upcomingPayments.length, 5);
-  assert.deepEqual(
-    body.upcomingPayments.map((payment) => payment.supplier),
-    [
-      "Nube Austral Hosting",
-      "Estudio Contable Ríos",
-      "Pixel Sur Diseño",
-      "Transportes Pacífico",
-      "Agencia Norte Media",
-    ],
-  );
-  assert.equal(body.upcomingPayments[0]?.stellarAccount, null);
-  assert.equal(body.upcomingPayments[0]?.fundedTxHash, null);
-  assert.equal(body.activity.length, 4);
-  assert.equal(body.cashFlow.length, 12);
-  assert.equal(body.cashFlow[0]?.month, "2025-11");
-  assert.equal(body.cashFlow[11]?.month, "2026-10");
-  assert.equal(body.categories.month, "2026-10");
-  assert.equal(body.countryVolumes.length, 4);
+  assert.equal(body.company.name, "");
+  assert.equal(body.company.countries, 0);
+  assert.equal(body.user.firstName, "");
+  assert.equal(body.kpis.balance.value, 0);
+  assert.equal(body.kpis.balance.change, 0);
+  assert.deepEqual(body.kpis.payable, { value: 0, invoices: 0 });
+  assert.equal(body.upcomingPayments.length, 0);
+  assert.equal(body.activity.length, 0);
+  assert.equal(body.cashFlow.length, 0);
+  assert.equal(body.categories.month, "");
+  assert.equal(body.categories.slices.length, 0);
+  assert.equal(body.countryVolumes.length, 0);
 });
 
-test("region US filters payments, activity, and volume, not the balance or payable", async () => {
+test("region US on an empty book stays empty", async () => {
   const body = dashboardOf(await getDashboard("region=US"));
-  assert.deepEqual(
-    body.upcomingPayments.map((payment) => payment.supplier),
-    ["Nube Austral Hosting"],
-  );
-  assert.deepEqual(
-    body.activity.map((item) => item.counterparty),
-    ["Transportes Pacífico", "Cliente Delta Retail", "Nube Austral Hosting"],
-  );
-  assert.ok(body.activity.every((item) => item.from === "US" || item.to === "US"));
-  assert.equal(body.kpis.balance.value, 248420);
-  assert.deepEqual(body.kpis.payable, { value: 10325, invoices: 5 });
-  assert.deepEqual(body.countryVolumes, [{ country: "US", amount: 51000 }]);
+  assert.deepEqual(body.upcomingPayments, []);
+  assert.deepEqual(body.activity, []);
+  assert.equal(body.kpis.balance.value, 0);
+  assert.deepEqual(body.kpis.payable, { value: 0, invoices: 0 });
+  assert.deepEqual(body.countryVolumes, []);
 });
 
-test("range 6 returns May through October 2026", async () => {
+test("range 6 on an empty book has no cash flow", async () => {
   const body = dashboardOf(await getDashboard("range=6"));
-  assert.deepEqual(
-    body.cashFlow.map((point) => point.month),
-    ["2026-05", "2026-06", "2026-07", "2026-08", "2026-09", "2026-10"],
-  );
-  assert.equal(body.cashFlow[0]?.income, 51000);
-  assert.equal(body.cashFlow[5]?.expenses, 38000);
+  assert.deepEqual(body.cashFlow, []);
 });
 
-test("categories previous sums the September slices", async () => {
+test("categories previous on an empty book sums to zero", async () => {
   const body = dashboardOf(await getDashboard("categories=previous"));
   const total = body.categories.slices.reduce((sum, slice) => sum + slice.amount, 0);
-  assert.equal(total, 5050 + 4300 + 3800 + 2900 + 1840 + 1200);
-  assert.equal(body.categories.total, total);
-  assert.equal(body.categories.month, "2026-09");
+  assert.equal(total, 0);
+  assert.equal(body.categories.total, 0);
+  assert.equal(body.categories.month, "");
 });
 
 test("unknown filters fall back to the defaults", async () => {
   const response = await getDashboard("region=ZZ&range=3&categories=later");
   const body = dashboardOf(response);
   assert.equal(response.statusCode, 200);
-  assert.equal(body.upcomingPayments.length, 5);
-  assert.equal(body.cashFlow.length, 12);
-  assert.equal(body.categories.month, "2026-10");
+  assert.equal(body.upcomingPayments.length, 0);
+  assert.equal(body.cashFlow.length, 0);
+  assert.equal(body.categories.month, "");
 });
 
 const INVALID_ACCOUNT = `G${"A".repeat(55)}`;
@@ -239,13 +214,13 @@ test("POST /business/supplier-payments without a cookie is 401 and does not writ
     assert.equal(response.statusCode, 401);
     assert.deepEqual(response.json(), { error: SIGN_IN_REQUIRED_ERROR });
     const dashboard = await readDashboard(app, token);
-    assert.deepEqual(dashboard.kpis.payable, { value: 10325, invoices: 5 });
-    assert.equal(dashboard.activity.length, 4);
-    assert.equal(dashboard.kpis.balance.value, 248420);
+    assert.deepEqual(dashboard.kpis.payable, { value: 0, invoices: 0 });
+    assert.equal(dashboard.activity.length, 0);
+    assert.equal(dashboard.kpis.balance.value, 0);
   });
 });
 
-test("a valid supplier payment is pending, raises payable, and leaves the snapshots", async () => {
+test("a valid supplier payment is pending and raises payable", async () => {
   await withSupplierApi(async ({ app, supplier, token }) => {
     const response = await postPayment(app, paymentBody(supplier), token);
     assert.equal(response.statusCode, 201);
@@ -269,23 +244,16 @@ test("a valid supplier payment is pending, raises payable, and leaves the snapsh
     assert.equal(JSON.stringify(created).includes("escrow"), false);
 
     const dashboard = await readDashboard(app, token);
-    assert.deepEqual(dashboard.kpis.payable, { value: 10425, invoices: 6 });
-    assert.equal(dashboard.kpis.balance.value, 248420);
-    assert.equal(dashboard.kpis.balance.change, 0.084);
-    assert.equal(dashboard.kpis.spend.value, 18290);
-    assert.equal(dashboard.kpis.spend.change, -0.042);
-    assert.equal(dashboard.kpis.international.value, 72640);
-    assert.equal(dashboard.kpis.international.payments, 24);
+    assert.deepEqual(dashboard.kpis.payable, { value: 100, invoices: 1 });
+    assert.equal(dashboard.kpis.balance.value, 0);
+    assert.equal(dashboard.kpis.balance.change, 0);
+    assert.equal(dashboard.kpis.spend.value, 0);
+    assert.equal(dashboard.kpis.spend.change, 0);
+    assert.equal(dashboard.kpis.international.value, 0);
+    assert.equal(dashboard.kpis.international.payments, 0);
     assert.deepEqual(
       dashboard.upcomingPayments.map((payment) => payment.supplier),
-      [
-        "Nube Austral Hosting",
-        "Estudio Contable Ríos",
-        "Taller Norte",
-        "Pixel Sur Diseño",
-        "Transportes Pacífico",
-        "Agencia Norte Media",
-      ],
+      ["Taller Norte"],
     );
     const listed = dashboard.upcomingPayments.find((payment) => payment.id === created.id);
     assert.equal(listed?.status, "pending");
@@ -297,32 +265,25 @@ test("a valid supplier payment is pending, raises payable, and leaves the snapsh
     assert.equal(dashboard.activity[0]?.amount, -100);
     assert.equal(dashboard.activity[0]?.from, "AR");
     assert.equal(dashboard.activity[0]?.to, "ES");
-    assert.equal(dashboard.activity.length, 5);
-    assert.equal(dashboard.cashFlow.length, 12);
-    assert.equal(dashboard.cashFlow[0]?.month, "2025-11");
-    assert.equal(dashboard.cashFlow[11]?.expenses, 38000);
-    assert.deepEqual(dashboard.countryVolumes, [
-      { country: "AR", amount: 124000 },
-      { country: "CR", amount: 71000 },
-      { country: "US", amount: 51000 },
-      { country: "ES", amount: 33000 },
-    ]);
+    assert.equal(dashboard.activity.length, 1);
+    assert.equal(dashboard.cashFlow.length, 0);
+    assert.deepEqual(dashboard.countryVolumes, []);
 
     const spain = await readDashboard(app, token, "region=ES");
     assert.deepEqual(
       spain.upcomingPayments.map((payment) => payment.supplier),
-      ["Taller Norte", "Pixel Sur Diseño"],
+      ["Taller Norte"],
     );
     assert.equal(spain.activity[0]?.counterparty, "Taller Norte");
     assert.equal(spain.activity[0]?.from, "AR");
     assert.equal(spain.activity[0]?.to, "ES");
-    assert.deepEqual(spain.kpis.payable, { value: 10425, invoices: 6 });
-    assert.equal(spain.kpis.balance.value, 248420);
+    assert.deepEqual(spain.kpis.payable, { value: 100, invoices: 1 });
+    assert.equal(spain.kpis.balance.value, 0);
 
     const unitedStates = await readDashboard(app, token, "region=US");
     assert.deepEqual(
       unitedStates.upcomingPayments.map((payment) => payment.supplier),
-      ["Nube Austral Hosting"],
+      [],
     );
     assert.equal(
       unitedStates.activity.some((item) => item.counterparty === "Taller Norte"),
@@ -363,10 +324,10 @@ test("an invalid account, empty name, zero amount, and empty due date do not wri
     }
 
     const dashboard = await readDashboard(app, token);
-    assert.deepEqual(dashboard.kpis.payable, { value: 10325, invoices: 5 });
-    assert.equal(dashboard.upcomingPayments.length, 5);
-    assert.equal(dashboard.activity.length, 4);
-    assert.equal(dashboard.kpis.balance.value, 248420);
+    assert.deepEqual(dashboard.kpis.payable, { value: 0, invoices: 0 });
+    assert.equal(dashboard.upcomingPayments.length, 0);
+    assert.equal(dashboard.activity.length, 0);
+    assert.equal(dashboard.kpis.balance.value, 0);
   });
 });
 
@@ -380,8 +341,8 @@ test("the company account cannot be the supplier and does not write", async () =
     assert.equal(response.statusCode, 400);
     assert.deepEqual(response.json(), { error: SUPPLIER_PAYMENT_ERRORS.treasury });
     const dashboard = await readDashboard(app, token);
-    assert.deepEqual(dashboard.kpis.payable, { value: 10325, invoices: 5 });
-    assert.equal(dashboard.activity.length, 4);
-    assert.equal(dashboard.kpis.balance.value, 248420);
+    assert.deepEqual(dashboard.kpis.payable, { value: 0, invoices: 0 });
+    assert.equal(dashboard.activity.length, 0);
+    assert.equal(dashboard.kpis.balance.value, 0);
   });
 });

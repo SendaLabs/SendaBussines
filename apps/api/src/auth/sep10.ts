@@ -17,13 +17,13 @@ export function networkPassphraseFor(network: Network): string {
   return Networks.TESTNET;
 }
 
-export function createSep10Challenge(input: {
+export async function createSep10Challenge(input: {
   serverKeypair: Keypair;
   account: string;
   homeDomain: string;
   networkPassphrase: string;
   nonces: NonceStore;
-}): { transaction: string; networkPassphrase: string } {
+}): Promise<{ transaction: string; networkPassphrase: string }> {
   const transaction = WebAuth.buildChallengeTx(
     input.serverKeypair,
     input.account,
@@ -33,14 +33,13 @@ export function createSep10Challenge(input: {
     input.homeDomain,
   );
   const tx = readTransaction(transaction, input.networkPassphrase);
-  input.nonces.remember(challengeNonce(tx), input.account, challengeDeadline(tx));
+  await input.nonces.remember(challengeNonce(tx), input.account, challengeDeadline(tx));
   return { transaction, networkPassphrase: input.networkPassphrase };
 }
 
-export function redeemSep10Challenge(input: {
+export async function redeemSep10Challenge(input: {
   transaction: string;
   serverKeypair: Keypair;
-  adminAccount: string;
   homeDomain: string;
   networkPassphrase: string;
   nonces: NonceStore;
@@ -55,9 +54,8 @@ export function redeemSep10Challenge(input: {
       input.homeDomain,
     );
     const account = details.clientAccountID;
-    if (account !== input.adminAccount) return null;
     if (!clientSigned(input.transaction, account, serverAccount, input)) return null;
-    if (!input.nonces.consume(challengeNonce(details.tx), account)) return null;
+    if (!(await input.nonces.consume(challengeNonce(details.tx), account))) return null;
     return account;
   } catch {
     return null;

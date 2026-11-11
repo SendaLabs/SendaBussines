@@ -53,7 +53,7 @@ export function BusinessHeader() {
             href={BUSINESS_LOGIN_PATH}
             className="hidden sm:inline-flex"
           >
-            <Button variant="senda" size="md" className="px-6">
+            <Button as="span" variant="senda" size="md" className="px-6">
               Iniciar sesión
             </Button>
           </Link>
@@ -90,7 +90,7 @@ export function BusinessHeader() {
               onClick={() => setOpen(false)}
               className="mt-3"
             >
-              <Button variant="senda" size="md" className="w-full">
+              <Button as="span" variant="senda" size="md" className="w-full">
                 Iniciar sesión
               </Button>
             </Link>

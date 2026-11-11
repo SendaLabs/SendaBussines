@@ -17,6 +17,8 @@ export const RECEIVER_IS_ADMIN =
 export const TRUSTLINE_REJECTED =
   "La cuenta del proveedor tiene que poder recibir USDC de testnet.";
 
+export const TRUSTLESS_KEY_MISSING = "Falta la clave de Trustless Work.";
+
 export const DEPLOY_FAILED =
   "No se pudo preparar el depósito. El pago sigue pendiente.";
 

@@ -171,14 +171,13 @@ begin
   end if;
 end $$;
 
--- Re-running the seed by hand does not duplicate the company: the rest of the
--- rows are inserted only when this run actually inserts the company.
+-- One empty company so payments have somewhere to attach. No sample rows.
 do $$
 declare
   new_company_id uuid;
 begin
   insert into public.companies (name, country_count)
-  values ('Empresa Demo S.R.L.', 4)
+  values ('Senda Business', 0)
   on conflict (name) do nothing
   returning id into new_company_id;
 
@@ -187,39 +186,7 @@ begin
   end if;
 
   insert into public.panel_faces (company_id, first_name, full_name, avatar_path)
-  values (new_company_id, 'Delfina', 'Delfina Corradini', '/images/P_Delfina.svg');
-
-  insert into public.supplier_payments (
-    company_id,
-    supplier_name,
-    country,
-    amount_usd,
-    due_on,
-    status,
-    stellar_account,
-    funded_tx_hash,
-    created_at
-  ) values
-    (new_company_id, 'Nube Austral Hosting', 'US', 1240, '2026-10-07', 'pending', null, null, timestamptz '2026-10-01 00:00:00-03'),
-    (new_company_id, 'Estudio Contable Ríos', 'AR', 3850, '2026-10-08', 'scheduled', null, null, timestamptz '2026-10-01 00:00:00-03'),
-    (new_company_id, 'Pixel Sur Diseño', 'ES', 860, '2026-10-10', 'scheduled', null, null, timestamptz '2026-10-01 00:00:00-03'),
-    (new_company_id, 'Transportes Pacífico', 'CR', 2400, '2026-10-14', 'approved', null, null, timestamptz '2026-10-01 00:00:00-03'),
-    (new_company_id, 'Agencia Norte Media', 'AR', 1975, '2026-10-16', 'pending', null, null, timestamptz '2026-10-01 00:00:00-03');
-
-  insert into public.activity_entries (
-    company_id,
-    supplier_payment_id,
-    kind,
-    counterparty,
-    amount_usd,
-    from_country,
-    to_country,
-    occurred_at
-  ) values
-    (new_company_id, null, 'supplierPayment', 'Pixel Sur Diseño', -320, 'AR', 'ES', timestamptz '2026-10-07 14:32:00-03'),
-    (new_company_id, null, 'internationalTransfer', 'Transportes Pacífico', -1250, 'US', 'CR', timestamptz '2026-10-07 11:08:00-03'),
-    (new_company_id, null, 'fundsReceived', 'Cliente Delta Retail', 8200, 'US', 'AR', timestamptz '2026-10-06 09:14:00-03'),
-    (new_company_id, null, 'cardSpend', 'Nube Austral Hosting', -86, 'AR', 'US', timestamptz '2026-10-05 18:40:00-03');
+  values (new_company_id, '', '', '');
 
   insert into public.kpi_snapshots (
     company_id,
@@ -233,56 +200,19 @@ begin
     period_to
   ) values (
     new_company_id,
-    248420,
-    0.084,
-    18290,
-    -0.042,
-    72640,
-    24,
-    '2026-10-01',
-    '2026-10-31'
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    '2026-11-01',
+    '2026-11-30'
   );
-
-  insert into public.cashflow_points (company_id, month, income_usd, expenses_usd)
-  values
-    (new_company_id, '2025-11-01', 36000, 28000),
-    (new_company_id, '2025-12-01', 42000, 30000),
-    (new_company_id, '2026-01-01', 38000, 27000),
-    (new_company_id, '2026-02-01', 39000, 26000),
-    (new_company_id, '2026-03-01', 41000, 29000),
-    (new_company_id, '2026-04-01', 47000, 31000),
-    (new_company_id, '2026-05-01', 51000, 33000),
-    (new_company_id, '2026-06-01', 63000, 34000),
-    (new_company_id, '2026-07-01', 57000, 36000),
-    (new_company_id, '2026-08-01', 64000, 39000),
-    (new_company_id, '2026-09-01', 61000, 40000),
-    (new_company_id, '2026-10-01', 72000, 38000);
-
-  insert into public.category_slices (company_id, period, month, slice_key, amount_usd)
-  values
-    (new_company_id, 'current', '2026-10-01', 'software', 5120),
-    (new_company_id, 'current', '2026-10-01', 'services', 4020),
-    (new_company_id, 'current', '2026-10-01', 'marketing', 3290),
-    (new_company_id, 'current', '2026-10-01', 'operations', 2745),
-    (new_company_id, 'current', '2026-10-01', 'people', 1830),
-    (new_company_id, 'current', '2026-10-01', 'other', 1285),
-    (new_company_id, 'previous', '2026-09-01', 'software', 5050),
-    (new_company_id, 'previous', '2026-09-01', 'services', 4300),
-    (new_company_id, 'previous', '2026-09-01', 'marketing', 3800),
-    (new_company_id, 'previous', '2026-09-01', 'operations', 2900),
-    (new_company_id, 'previous', '2026-09-01', 'people', 1840),
-    (new_company_id, 'previous', '2026-09-01', 'other', 1200);
 
   insert into public.card_snapshots (
     company_id, last4, currency, active_count, total_count
   ) values (
-    new_company_id, '4821', 'USD', 3, 10
+    new_company_id, '', 'USD', 0, 0
   );
-
-  insert into public.country_volumes (company_id, country, amount_usd)
-  values
-    (new_company_id, 'AR', 124000),
-    (new_company_id, 'CR', 71000),
-    (new_company_id, 'US', 51000),
-    (new_company_id, 'ES', 33000);
 end $$;

@@ -126,12 +126,27 @@ describe("SEP-10 business session", { concurrency: false }, () => {
     assert.equal(missing.statusCode, 400);
   });
 
-  test("rejects a valid account that is not the company", async () => {
-    const response = await challengeFor(app, Keypair.random().publicKey());
-    assert.equal(response.statusCode, 401);
-    assert.deepEqual(response.json(), { error: "Esa cuenta no pertenece a la empresa." });
-    assert.equal(response.json().transaction, undefined);
-    assert.equal(response.headers["set-cookie"], undefined);
+  test("a wallet that is not the company can sign in", async () => {
+    const visitor = Keypair.random();
+    const issued = await challengeFor(app, visitor.publicKey());
+    assert.equal(issued.statusCode, 200);
+    const { transaction, networkPassphrase } = issued.json() as Sep10ChallengeResponse;
+    const response = await app.inject({
+      method: "POST",
+      url: API_ROUTES.sep10Token,
+      payload: { transaction: signChallenge(transaction, visitor, networkPassphrase) },
+    });
+    assert.equal(response.statusCode, 204);
+
+    const cookie = cookieHeader(response).split(";")[0];
+    assert.ok(cookie);
+    const session = await app.inject({
+      method: "GET",
+      url: API_ROUTES.businessSession,
+      headers: { cookie },
+    });
+    assert.equal(session.statusCode, 200);
+    assert.deepEqual(session.json(), { account: visitor.publicKey() });
   });
 
   test("returns a SEP-10 challenge for the company account", async () => {

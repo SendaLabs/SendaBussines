@@ -1,7 +1,7 @@
 import { Keypair, StrKey } from "@stellar/stellar-sdk";
 import type { FastifyPluginAsync, FastifyReply } from "fastify";
 import { API_ROUTES, SESSION_COOKIE, type ApiErrorBody } from "@senda/shared";
-import { createNonceStore } from "../auth/nonce-store.js";
+import type { NonceStore } from "../auth/nonce-store.js";
 import { createSep10Challenge, networkPassphraseFor, redeemSep10Challenge } from "../auth/sep10.js";
 import {
   clearSessionCookieHeader,
@@ -11,14 +11,25 @@ import {
   verifySession,
 } from "../auth/session.js";
 import type { Env } from "../config/env.js";
+import type { BusinessStore } from "../store/types.js";
 
 const INVALID_ACCOUNT = "Ingresá una cuenta Stellar válida.";
-const UNKNOWN_ACCOUNT = "Esa cuenta no pertenece a la empresa.";
 const BAD_SIGNATURE = "No se pudo verificar la firma.";
 const LOGIN_REQUIRED = "Tenés que ingresar.";
 
-export function businessAuthRoutes(env: Env): FastifyPluginAsync {
-  const nonces = createNonceStore();
+export function businessAuthRoutes(env: Env, store: BusinessStore): FastifyPluginAsync {
+  const nonces: NonceStore = {
+    remember(nonce, account, expiresAt) {
+      return store.rememberSep10Nonce({
+        nonce,
+        account,
+        expiresAt: new Date(expiresAt).toISOString(),
+      });
+    },
+    consume(nonce, account) {
+      return store.consumeSep10Nonce(nonce, account, new Date());
+    },
+  };
   const serverKeypair = Keypair.fromSecret(env.SEP10_SIGNING_SECRET);
   const networkPassphrase = networkPassphraseFor(env.STELLAR_NETWORK);
   const secure = env.NODE_ENV === "production";
@@ -27,7 +38,6 @@ export function businessAuthRoutes(env: Env): FastifyPluginAsync {
     app.post(API_ROUTES.sep10Challenge, async (request, reply) => {
       const account = publicAccount(request.body);
       if (!account) return error(reply, 400, INVALID_ACCOUNT);
-      if (account !== env.STELLAR_ADMIN_PUBLIC) return error(reply, 401, UNKNOWN_ACCOUNT);
       if (serverKeypair.publicKey() === env.STELLAR_ADMIN_PUBLIC) {
         return reply.code(500).send({
           error: "The SEP-10 signing account and the company account must be different.",
@@ -46,10 +56,9 @@ export function businessAuthRoutes(env: Env): FastifyPluginAsync {
     app.post(API_ROUTES.sep10Token, async (request, reply) => {
       const transaction = signedTransaction(request.body);
       const account = transaction
-        ? redeemSep10Challenge({
+        ? await redeemSep10Challenge({
             transaction,
             serverKeypair,
-            adminAccount: env.STELLAR_ADMIN_PUBLIC,
             homeDomain: env.SEP10_HOME_DOMAIN,
             networkPassphrase,
             nonces,
@@ -77,7 +86,7 @@ function sessionAccount(cookie: string | string[] | undefined, env: Env): string
   const token = readRequestCookie(cookie, SESSION_COOKIE);
   if (!token) return null;
   const session = verifySession(token, env.SESSION_SECRET);
-  if (!session || session.account !== env.STELLAR_ADMIN_PUBLIC) return null;
+  if (!session) return null;
   return session.account;
 }
 
