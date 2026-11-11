@@ -2,7 +2,12 @@ import "server-only";
 
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { API_ROUTES, SESSION_COOKIE, type BusinessDashboard } from "@senda/shared";
+import {
+  API_ROUTES,
+  SESSION_COOKIE,
+  type BusinessDashboard,
+  type BusinessSessionResponse,
+} from "@senda/shared";
 
 import {
   FILTER_PARAMS,
@@ -25,12 +30,6 @@ function apiOrigin(): string {
 export async function loadBusinessDashboard(
   filters: DashboardFilters,
 ): Promise<BusinessDashboard> {
-  const headerList = await headers();
-  const session = (await cookies()).get(SESSION_COOKIE)?.value;
-  const incoming = headerList.get("cookie");
-  const cookieHeader =
-    incoming ?? (session ? `${SESSION_COOKIE}=${session}` : undefined);
-
   const query = new URLSearchParams({
     [FILTER_PARAMS.region]: filters.region,
     [FILTER_PARAMS.range]: filters.range,
@@ -41,7 +40,7 @@ export async function loadBusinessDashboard(
     `${apiOrigin()}${API_ROUTES.businessDashboard}?${query.toString()}`,
     {
       cache: "no-store",
-      headers: cookieHeader ? { cookie: cookieHeader } : undefined,
+      headers: await sessionHeaders(),
     },
   );
 
@@ -54,4 +53,42 @@ export async function loadBusinessDashboard(
   }
 
   return (await response.json()) as BusinessDashboard;
+}
+
+/** Who signed in. The company book does not know that person. */
+export async function loadBusinessSession(): Promise<BusinessSessionResponse> {
+  const response = await fetch(`${apiOrigin()}${API_ROUTES.businessSession}`, {
+    cache: "no-store",
+    headers: await sessionHeaders(),
+  });
+
+  if (response.status === 401) {
+    redirect(BUSINESS_LOGIN_PATH);
+  }
+  if (!response.ok) {
+    throw new Error("No se pudo leer la sesión.");
+  }
+
+  const body: unknown = await response.json();
+  if (!isSession(body)) {
+    throw new Error("No se pudo leer la sesión.");
+  }
+  return {
+    account: body.account,
+    name: typeof body.name === "string" && body.name.trim().length > 0 ? body.name.trim() : null,
+  };
+}
+
+async function sessionHeaders(): Promise<{ cookie: string } | undefined> {
+  const headerList = await headers();
+  const session = (await cookies()).get(SESSION_COOKIE)?.value;
+  const incoming = headerList.get("cookie");
+  const cookieHeader = incoming ?? (session ? `${SESSION_COOKIE}=${session}` : undefined);
+  return cookieHeader ? { cookie: cookieHeader } : undefined;
+}
+
+function isSession(value: unknown): value is { account: string; name?: unknown } {
+  if (typeof value !== "object" || value === null) return false;
+  const record = value as Record<string, unknown>;
+  return typeof record.account === "string" && record.account.length > 0;
 }

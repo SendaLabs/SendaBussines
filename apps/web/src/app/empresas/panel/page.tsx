@@ -3,8 +3,9 @@ import { Suspense } from "react";
 
 import { BusinessDashboardPage } from "@/components/business/dashboard/dashboard-page";
 import { parseDashboardFilters } from "@/components/business/dashboard/filters";
-import { loadBusinessDashboard } from "@/lib/business-dashboard";
+import { loadBusinessDashboard, loadBusinessSession } from "@/lib/business-dashboard";
 import { requireBusinessSession } from "@/lib/session";
+import { sessionSigner } from "@/lib/session-signer";
 
 export const metadata: Metadata = {
   title: "Panel",
@@ -23,13 +24,17 @@ async function PanelContent({
 }) {
   await requireBusinessSession();
   const filters = parseDashboardFilters(await searchParams);
-  const data = await loadBusinessDashboard(filters);
+  const [data, session] = await Promise.all([
+    loadBusinessDashboard(filters),
+    loadBusinessSession(),
+  ]);
   const treasuryAccount = process.env.STELLAR_ADMIN_PUBLIC?.trim() ?? "";
   return (
     <BusinessDashboardPage
       data={data}
       filters={filters}
       treasuryAccount={treasuryAccount}
+      signer={sessionSigner(session)}
     />
   );
 }

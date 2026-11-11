@@ -13,10 +13,21 @@ export const SESSION_TTL_SECONDS = SESSION_TTL_MS / 1000;
 
 const MIN_SECRET_LENGTH = 32;
 
+const MAX_DISPLAY_NAME = 80;
+
 type SessionPayload = {
   account: string;
   exp: number;
+  name?: string;
 };
+
+/** A display name for the person who signed in. Authorization still uses the account. */
+export function cleanDisplayName(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const name = value.replace(/[\u0000-\u001F\u007F]/g, " ").replace(/\s+/g, " ").trim();
+  if (name.length === 0 || name.length > MAX_DISPLAY_NAME) return null;
+  return name;
+}
 
 function assertSecret(secret: string): void {
   if (secret.length < MIN_SECRET_LENGTH) {
@@ -42,20 +53,26 @@ function isSessionPayload(value: unknown): value is SessionPayload {
     typeof record.account === "string" &&
     record.account.length > 0 &&
     typeof record.exp === "number" &&
-    Number.isFinite(record.exp)
+    Number.isFinite(record.exp) &&
+    (record.name === undefined || typeof record.name === "string")
   );
 }
 
 /** HMAC-SHA256 token. The payload is the treasury account and an absolute expiry, never a secret. */
-export function signSession(account: string, secret: string, now = Date.now()): string {
+export function signSession(
+  account: string,
+  secret: string,
+  now = Date.now(),
+  name?: string | null,
+): string {
   assertSecret(secret);
   if (account.length === 0) {
     throw new Error("La sesión necesita una cuenta.");
   }
-  const body = Buffer.from(
-    JSON.stringify({ account, exp: now + SESSION_TTL_MS }),
-    "utf8",
-  ).toString("base64url");
+  const payload: SessionPayload = { account, exp: now + SESSION_TTL_MS };
+  const displayName = cleanDisplayName(name);
+  if (displayName) payload.name = displayName;
+  const body = Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
   return `${body}.${signature(body, secret)}`;
 }
 
@@ -63,7 +80,7 @@ export function verifySession(
   token: string | undefined,
   secret: string,
   now = Date.now(),
-): { account: string } | null {
+): { account: string; name: string | null } | null {
   assertSecret(secret);
   if (!token) return null;
   const dot = token.indexOf(".");
@@ -74,7 +91,7 @@ export function verifySession(
   try {
     const parsed: unknown = JSON.parse(Buffer.from(body, "base64url").toString("utf8"));
     if (!isSessionPayload(parsed) || parsed.exp <= now) return null;
-    return { account: parsed.account };
+    return { account: parsed.account, name: cleanDisplayName(parsed.name) };
   } catch {
     return null;
   }
@@ -105,7 +122,7 @@ export function sessionFromCookieHeader(
   header: string | string[] | undefined,
   secret: string,
   now = Date.now(),
-): { account: string } | null {
+): { account: string; name: string | null } | null {
   return verifySession(readRequestCookie(header, SESSION_COOKIE_NAME), secret, now);
 }
 

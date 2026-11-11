@@ -121,6 +121,7 @@ export interface Sep10ChallengeResponse {
 
 export interface BusinessSessionResponse {
   account: string;
+  name: string | null;
 }
 
 export function supplierPaymentFundEscrowPath(paymentId: string): string {

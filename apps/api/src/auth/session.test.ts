@@ -13,9 +13,19 @@ const SECRET = "senda-business-session-secret-32";
 test("session cookie round trip keeps the account and the expiry", () => {
   const now = Date.parse("2026-10-25T15:00:00.000Z");
   const token = signSession("GTEST", SECRET, now);
-  assert.deepEqual(verifySession(token, SECRET, now + SESSION_TTL_MS - 1), { account: "GTEST" });
+  assert.deepEqual(verifySession(token, SECRET, now + SESSION_TTL_MS - 1), {
+    account: "GTEST",
+    name: null,
+  });
   assert.equal(verifySession(token, SECRET, now + SESSION_TTL_MS), null);
   assert.equal(readCookie(`a=1; ${SESSION_COOKIE_NAME}=${token}; b=2`, SESSION_COOKIE_NAME), token);
+});
+
+test("session keeps a short display name and drops a blank one", () => {
+  const named = signSession("GTEST", SECRET, Date.now(), "  Delfina\nGarcía  ");
+  assert.equal(verifySession(named, SECRET)?.name, "Delfina García");
+  const blank = signSession("GTEST", SECRET, Date.now(), "   ");
+  assert.equal(verifySession(blank, SECRET)?.name, null);
 });
 
 test("tampered tokens and short secrets do not open a session", () => {

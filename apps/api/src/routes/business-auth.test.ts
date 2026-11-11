@@ -146,7 +146,7 @@ describe("SEP-10 business session", { concurrency: false }, () => {
       headers: { cookie },
     });
     assert.equal(session.statusCode, 200);
-    assert.deepEqual(session.json(), { account: visitor.publicKey() });
+    assert.deepEqual(session.json(), { account: visitor.publicKey(), name: null });
   });
 
   test("returns a SEP-10 challenge for the company account", async () => {
@@ -204,7 +204,27 @@ describe("SEP-10 business session", { concurrency: false }, () => {
       headers: { cookie: cookie.split(";")[0] },
     });
     assert.equal(session.statusCode, 200);
-    assert.deepEqual(session.json(), { account: admin.publicKey() });
+    assert.deepEqual(session.json(), { account: admin.publicKey(), name: null });
+  });
+
+  test("keeps the name of the person who signed in", async () => {
+    const issued = await challengeFor(app);
+    const { transaction, networkPassphrase } = issued.json() as Sep10ChallengeResponse;
+    const response = await app.inject({
+      method: "POST",
+      url: API_ROUTES.sep10Token,
+      payload: {
+        transaction: signChallenge(transaction, admin, networkPassphrase),
+        name: "  Delfina García  ",
+      },
+    });
+    assert.equal(response.statusCode, 204);
+    const session = await app.inject({
+      method: "GET",
+      url: API_ROUTES.businessSession,
+      headers: { cookie: cookieHeader(response).split(";")[0] },
+    });
+    assert.deepEqual(session.json(), { account: admin.publicKey(), name: "Delfina García" });
   });
 
   test("rejects the same signed challenge on the second redeem", async () => {
@@ -292,7 +312,7 @@ describe("SEP-10 business session", { concurrency: false }, () => {
       url: API_ROUTES.businessSession,
       headers: { cookie: pair },
     });
-    assert.deepEqual(authed.json(), { account: admin.publicKey() });
+    assert.deepEqual(authed.json(), { account: admin.publicKey(), name: null });
 
     const tampered = await app.inject({
       method: "GET",

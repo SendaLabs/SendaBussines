@@ -25,6 +25,7 @@ import { LogoutButton } from "@/components/business/dashboard/logout-button";
 import { MobileNav } from "@/components/business/dashboard/mobile-nav";
 import { NewSupplierPaymentButton } from "@/components/business/dashboard/new-supplier-payment-dialog";
 import { ReleaseMilestoneButton } from "@/components/business/dashboard/release-milestone-button";
+import type { SessionSigner } from "@/lib/session-signer";
 import { BUSINESS_DASHBOARD_PATH } from "@/lib/site";
 import { cn } from "@/lib/utils";
 
@@ -86,12 +87,14 @@ export function BusinessDashboardPage({
   data,
   filters,
   treasuryAccount,
+  signer,
 }: {
   data: BusinessDashboard;
   filters: DashboardFilters;
   treasuryAccount: string;
+  signer: SessionSigner;
 }) {
-  const sidebar = <Sidebar company={data.company} user={data.user} />;
+  const sidebar = <Sidebar signer={signer} />;
 
   return (
     <>
@@ -139,6 +142,7 @@ export function BusinessDashboardPage({
               data={data}
               region={filters.region}
               treasuryAccount={treasuryAccount}
+              signer={signer}
             />
             <KpiGrid data={data} />
 
@@ -160,10 +164,7 @@ export function BusinessDashboardPage({
   );
 }
 
-function Sidebar({
-  company,
-  user,
-}: Pick<BusinessDashboard, "company" | "user">) {
+function Sidebar({ signer }: { signer: SessionSigner }) {
   return (
     <div className="flex h-full flex-col px-4 pt-6 pb-4">
       <Link
@@ -211,31 +212,19 @@ function Sidebar({
         </ul>
       </nav>
 
-      <div className="mt-auto space-y-3 pt-8">
+      <div className="mt-auto pt-8">
         <div className="flex items-center gap-3 rounded-xl bg-white/6 px-3 py-3">
           <span
             className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#3f8a72] text-sm font-semibold"
             aria-hidden
           >
-            {company.name.charAt(0)}
+            {signer.name.charAt(0).toLocaleUpperCase("es")}
           </span>
-          <div className="min-w-0">
-            <p className="truncate text-sm font-medium">{company.name}</p>
-            <p className="text-xs text-white/60">{company.countries} países</p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3 px-2">
-          <Image
-            src={user.avatar}
-            alt=""
-            width={36}
-            height={36}
-            className="size-9 rounded-full object-cover"
-          />
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium">{user.fullName}</p>
-            <p className="text-xs text-white/60">Admin</p>
+            <p className="truncate text-sm font-medium">{signer.name}</p>
+            {signer.personal ? (
+              <p className="truncate text-xs text-white/60">{signer.account}</p>
+            ) : null}
           </div>
           <LogoutButton />
         </div>
@@ -248,10 +237,12 @@ function Header({
   data,
   region,
   treasuryAccount,
+  signer,
 }: {
   data: BusinessDashboard;
   region: DashboardFilters["region"];
   treasuryAccount: string;
+  signer: SessionSigner;
 }) {
   return (
     <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -265,7 +256,7 @@ function Header({
           </span>
         </div>
         <h1 className="text-2xl font-semibold tracking-tight text-forest sm:text-[1.75rem]">
-          Buenas, {data.user.firstName}.
+          {signer.personal ? `Buenas, ${signer.name.split(/\s+/)[0]}.` : "Buenas."}
         </h1>
         <p className="mt-1 text-sm text-charcoal/65">
           Acá tenés el resumen de tu operación.

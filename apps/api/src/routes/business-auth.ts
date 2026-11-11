@@ -7,6 +7,7 @@ import {
   clearSessionCookieHeader,
   readRequestCookie,
   sessionCookieHeader,
+  cleanDisplayName,
   signSession,
   verifySession,
 } from "../auth/session.js";
@@ -66,14 +67,14 @@ export function businessAuthRoutes(env: Env, store: BusinessStore): FastifyPlugi
         : null;
       if (!account) return error(reply, 401, BAD_SIGNATURE);
 
-      const token = signSession(account, env.SESSION_SECRET);
+      const token = signSession(account, env.SESSION_SECRET, Date.now(), displayName(request.body));
       return reply.header("set-cookie", sessionCookieHeader(token, secure)).code(204).send();
     });
 
     app.get(API_ROUTES.businessSession, async (request, reply) => {
-      const account = sessionAccount(request.headers.cookie, env);
-      if (!account) return error(reply, 401, LOGIN_REQUIRED);
-      return { account };
+      const session = signedSession(request.headers.cookie, env);
+      if (!session) return error(reply, 401, LOGIN_REQUIRED);
+      return { account: session.account, name: session.name };
     });
 
     app.delete(API_ROUTES.businessSession, async (_request, reply) => {
@@ -82,12 +83,10 @@ export function businessAuthRoutes(env: Env, store: BusinessStore): FastifyPlugi
   };
 }
 
-function sessionAccount(cookie: string | string[] | undefined, env: Env): string | null {
+function signedSession(cookie: string | string[] | undefined, env: Env) {
   const token = readRequestCookie(cookie, SESSION_COOKIE);
   if (!token) return null;
-  const session = verifySession(token, env.SESSION_SECRET);
-  if (!session) return null;
-  return session.account;
+  return verifySession(token, env.SESSION_SECRET);
 }
 
 function publicAccount(body: unknown): string | null {
@@ -97,6 +96,11 @@ function publicAccount(body: unknown): string | null {
   } catch {
     return null;
   }
+}
+
+function displayName(body: unknown): string | null {
+  if (!isRecord(body)) return null;
+  return cleanDisplayName(body.name);
 }
 
 function signedTransaction(body: unknown): string | null {

@@ -28,7 +28,7 @@ export async function completeGoogleLogin(code: string, state: string): Promise<
   const session = await privy.auth.oauth.loginWithCode(code, state, "google");
   const wallet = await stellarWallet(privy, session.user);
   await connectSigner(privy);
-  await exchangeSep10(wallet.address, async (transaction, networkPassphrase) => {
+  await exchangeSep10(wallet.address, googleName(session.user), async (transaction, networkPassphrase) => {
     const signed = await rawSign(
       walletContext(privy),
       (input) => privy.embeddedWallet.signWithUserSigner(input),
@@ -86,6 +86,17 @@ async function stellarWallet(privy: Privy, user: User): Promise<{ id: string; ad
   return { id: created.id, address: created.address };
 }
 
+function googleName(user: User): string | null {
+  for (const account of user.linked_accounts) {
+    if (account.type !== "google_oauth") continue;
+    const name = account.name?.trim();
+    if (name) return name;
+    const email = account.email.trim();
+    if (email) return email;
+  }
+  return null;
+}
+
 function findStellarWallet(user: User): { id: string; address: string } | null {
   for (const account of user.linked_accounts) {
     if (account.type !== "wallet" || account.chain_type !== "stellar") continue;
@@ -123,6 +134,7 @@ function connectSigner(privy: Privy): Promise<void> {
 
 async function exchangeSep10(
   account: string,
+  name: string | null,
   sign: (transaction: string, networkPassphrase: string) => Promise<string>,
 ): Promise<void> {
   const challengeResponse = await fetch(BUSINESS_API.sep10Challenge, {
@@ -141,7 +153,7 @@ async function exchangeSep10(
     method: "POST",
     credentials: "include",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ transaction: signedXdr }),
+    body: JSON.stringify(name ? { transaction: signedXdr, name } : { transaction: signedXdr }),
   });
   if (tokenResponse.status !== 204) {
     throw new Error(await readError(tokenResponse, SIGNATURE_FAILED));
