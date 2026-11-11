@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@privy-io/js-sdk-core": "^0.79.4",
     "@react-three/fiber": "^9.8.2",
     "@senda/shared": "*",
     "@stellar/freighter-api": "^6.0.1",
@@ -22,6 +23,7 @@
     "server-only": "^0.0.1",
     "tailwind-merge": "^3.7.0",
     "three": "^0.186.1",
+    "viem": "^2.57.17",
     "zod": "^4.6.7"
   },
   "devDependencies": {
