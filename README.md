@@ -47,7 +47,7 @@ Stellar holds and moves the testnet USDC. It is not used as the business databas
 
 - **The payment is held in escrow.** Each funded supplier payment is locked in a Trustless Work v2 multi-release escrow. It reaches the supplier when the company releases the milestone.
 - **The business details stay off the ledger.** Funding and release produce transaction hashes. The public copy is generic (`Cuenta por pagar` / `Pago`). The supplier name and country are not written to Stellar. The API stores a SHA-256 of the payment details.
-- **Wallet or Google sign-in.** A Stellar account signs a SEP-10 challenge with Freighter. Google sign-in is available when `NEXT_PUBLIC_PRIVY_APP_ID` is set. Any verified account can open the panel.
+- **Wallet or Google sign-in.** The user picks any wallet supported by the [Stellar Wallets Kit](https://stellarwalletskit.dev) and signs a SEP-10 challenge with it. Google sign-in is available when `NEXT_PUBLIC_PRIVY_APP_ID` is set. Any verified account can open the panel.
 - **Existing tools.** Escrow is Trustless Work v2 (beta). Authentication is SEP-10. Signing uses the Stellar SDK.
 
 ---
@@ -67,7 +67,7 @@ Checked against the code in this repository. Status names match what a reader ca
 
 ## How a supplier payment works
 
-1. **Sign in.** Google, or any Stellar account through SEP-10 and Freighter. The API checks the signature and sets a signed `senda_session` cookie.
+1. **Sign in.** Google, or any Stellar wallet (chosen in the Stellar Wallets Kit selector) through SEP-10. The API checks the signature and sets a signed `senda_session` cookie.
 2. **Register.** The company enters supplier name, Stellar account, country, amount in USD and due date. The payment is stored as `pending`, together with its activity row, in one database transaction.
 3. **Fund.** The API checks the monthly cap, claims the payment so two overlapping calls cannot move USDC twice, deploys a Trustless Work escrow (one milestone) and funds it with testnet USDC. The payment becomes `approved` with its escrow contract id and funding transaction hash. If funding fails after the escrow is deployed, a retry reuses the same contract. The server signs with `TREASURY_SECRET`.
 4. **Release.** The company releases the milestone. The server signs that transaction too. The payment becomes `released`.
@@ -98,7 +98,7 @@ Checked on 14 November 2026 against Horizon testnet (`/transactions/<hash>`). Al
 │  apps/web  │ ──────────────────▶ │   apps/api   │ ─────▶ │    Supabase    │
 │  Next.js   │   (SEP-10 / Google) │   Fastify    │        │ Postgres + RLS │
 └─────┬──────┘                     └──────┬───────┘        └────────────────┘
-      │ Freighter                         │
+      │ Wallets Kit                       │
       ▼                                   ▼
   Stellar wallet               Trustless Work v2 (beta) ──▶ Stellar testnet (USDC)
 ```
@@ -114,7 +114,7 @@ Checked on 14 November 2026 against Horizon testnet (`/transactions/<hash>`). Al
 | Route | What it is |
 | --- | --- |
 | `/empresas` | Landing page |
-| `/empresas/ingresar` | Sign in with Google or a Stellar wallet (Freighter) |
+| `/empresas/ingresar` | Sign in with Google or a Stellar wallet (Stellar Wallets Kit) |
 | `/empresas/panel` | Company panel (requires a session cookie) |
 
 ### API routes
@@ -156,7 +156,7 @@ Applied in order from `supabase/migrations`:
 - Node.js 20+ (the Docker images use Node 22)
 - A Supabase project
 - A Trustless Work v2 beta API key, only if you fund or release an escrow
-- Freighter, or a Privy app id if you use Google sign-in
+- A Stellar wallet supported by the Stellar Wallets Kit (for example Freighter or xBull), or a Privy app id if you use Google sign-in
 - Rust 1.84+ with the `wasm32v1-none` target and the [Stellar CLI](https://developers.stellar.org/docs/tools/cli/install-cli), only if you work on the contracts
 - Docker (optional; see the note under Run)
 

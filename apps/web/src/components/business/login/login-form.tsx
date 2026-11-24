@@ -2,14 +2,20 @@
 
 import { ArrowRight, Wallet } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
-import type { ApiErrorBody, Sep10ChallengeResponse } from "@senda/shared";
+import { useEffect, useRef, useState, useTransition } from "react";
 
 import { BUSINESS_API } from "@/lib/business-api";
 import { BUSINESS_DASHBOARD_PATH } from "@/lib/site";
+import {
+  createExclusiveRunner,
+  loginWithStellarWallet,
+  WALLET_CANCELLED_MESSAGE,
+  WALLET_PHASE_STATUS,
+  type WalletLoginPhase,
+} from "@/lib/stellar-wallet-login";
+import { createStellarWalletsKitPort } from "@/lib/stellar-wallets-kit";
 
 const GOOGLE_ENABLED = Boolean(process.env.NEXT_PUBLIC_PRIVY_APP_ID);
-const INSTALL_FREIGHTER = "Instalá Freighter para entrar.";
 const GOOGLE_FAILED = "No pudimos entrar con Google.";
 
 export function LoginForm() {
@@ -17,6 +23,9 @@ export function LoginForm() {
   const [isNavigating, startNavigation] = useTransition();
   const [pending, setPending] = useState<"wallet" | "google" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [walletPhase, setWalletPhase] = useState<WalletLoginPhase | null>(null);
+  const walletAttempt = useRef(createExclusiveRunner());
   const busy = pending !== null || isNavigating;
 
   useEffect(() => {
@@ -52,77 +61,34 @@ export function LoginForm() {
 
   async function onEnter() {
     if (busy) return;
-    setError(null);
-    setPending("wallet");
-    try {
-      let freighter: typeof import("@stellar/freighter-api");
+    // `busy` is React state and updates asynchronously, so a fast double click
+    // could still start two attempts. The runner closes that gap.
+    await walletAttempt.current.run(async () => {
+      setError(null);
+      setNotice(null);
+      setPending("wallet");
+      setWalletPhase("connecting");
       try {
-        freighter = await import("@stellar/freighter-api");
+        const result = await loginWithStellarWallet({
+          wallet: createStellarWalletsKitPort(),
+          fetch: (input, init) => fetch(input, init),
+          endpoints: { challenge: BUSINESS_API.sep10Challenge, token: BUSINESS_API.sep10Token },
+          onPhase: setWalletPhase,
+        });
+        if (result.status === "success") {
+          startNavigation(() => router.push(BUSINESS_DASHBOARD_PATH));
+        } else if (result.status === "cancelled") {
+          setNotice(WALLET_CANCELLED_MESSAGE[result.phase]);
+        } else {
+          setError(result.message);
+        }
       } catch {
-        setError(INSTALL_FREIGHTER);
-        return;
+        setError("No pudimos completar el ingreso.");
+      } finally {
+        setPending(null);
+        setWalletPhase(null);
       }
-
-      let connected = false;
-      try {
-        const result = await freighter.isConnected();
-        connected = result.isConnected && !result.error;
-      } catch {
-        connected = false;
-      }
-      if (!connected) {
-        setError(INSTALL_FREIGHTER);
-        return;
-      }
-
-      const access = await freighter.requestAccess();
-      if (access.error || !access.address) {
-        setError("No pudimos conectar la billetera.");
-        return;
-      }
-
-      const challengeResponse = await fetch(BUSINESS_API.sep10Challenge, {
-        method: "POST",
-        credentials: "include",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ account: access.address }),
-      });
-      if (!challengeResponse.ok) {
-        setError(await readError(challengeResponse, "No se pudo preparar el ingreso."));
-        return;
-      }
-      const challenge: unknown = await challengeResponse.json();
-      if (!isChallenge(challenge)) {
-        setError("No se pudo preparar el ingreso.");
-        return;
-      }
-
-      const signed = await freighter.signTransaction(challenge.transaction, {
-        networkPassphrase: challenge.networkPassphrase,
-        address: access.address,
-      });
-      if (signed.error || !signed.signedTxXdr) {
-        setError("No se pudo verificar la firma.");
-        return;
-      }
-
-      const tokenResponse = await fetch(BUSINESS_API.sep10Token, {
-        method: "POST",
-        credentials: "include",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ transaction: signed.signedTxXdr }),
-      });
-      if (tokenResponse.status !== 204) {
-        setError(await readError(tokenResponse, "No se pudo verificar la firma."));
-        return;
-      }
-
-      startNavigation(() => router.push(BUSINESS_DASHBOARD_PATH));
-    } catch {
-      setError("No pudimos completar el ingreso.");
-    } finally {
-      setPending(null);
-    }
+    });
   }
 
   async function onGoogle() {
@@ -164,6 +130,15 @@ export function LoginForm() {
           </p>
         ) : null}
 
+        {notice && pending === null ? (
+          <p
+            role="status"
+            className="mb-4 rounded-xl border border-stone bg-white px-4 py-3 text-sm text-charcoal/70"
+          >
+            {notice}
+          </p>
+        ) : null}
+
         {GOOGLE_ENABLED ? (
           <>
             <button
@@ -195,24 +170,12 @@ export function LoginForm() {
           {pending === "wallet" ? "Ingresando…" : "Entrar con la billetera"}
           <ArrowRight className="size-4" aria-hidden />
         </button>
+        <p role="status" aria-live="polite" className="mt-3 min-h-5 text-center text-sm text-charcoal/60">
+          {walletPhase ? WALLET_PHASE_STATUS[walletPhase] : null}
+        </p>
       </div>
     </div>
   );
-}
-
-async function readError(response: Response, fallback: string): Promise<string> {
-  try {
-    const body: unknown = await response.json();
-    if (isApiError(body)) return body.error;
-  } catch {
-    return fallback;
-  }
-  return fallback;
-}
-
-function isApiError(value: unknown): value is ApiErrorBody {
-  if (typeof value !== "object" || value === null || !("error" in value)) return false;
-  return typeof value.error === "string" && value.error.length > 0;
 }
 
 function GoogleMark() {
@@ -235,16 +198,5 @@ function GoogleMark() {
         d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.962L3.964 7.294C4.672 5.163 6.656 3.58 9 3.58Z"
       />
     </svg>
-  );
-}
-
-function isChallenge(value: unknown): value is Sep10ChallengeResponse {
-  if (typeof value !== "object" || value === null) return false;
-  const record = value as Record<string, unknown>;
-  return (
-    typeof record.transaction === "string" &&
-    record.transaction.length > 0 &&
-    typeof record.networkPassphrase === "string" &&
-    record.networkPassphrase.length > 0
   );
 }

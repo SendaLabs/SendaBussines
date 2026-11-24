@@ -7,13 +7,14 @@
     "build": "next build",
     "start": "next start --port 3000",
     "lint": "eslint",
+    "test": "node --import tsx --test src/**/*.test.ts",
     "test:ctas": "node --test tests/landing-ctas.test.mjs"
   },
   "dependencies": {
+    "@creit.tech/stellar-wallets-kit": "^2.8.0",
     "@privy-io/js-sdk-core": "^0.79.4",
     "@react-three/fiber": "^9.8.2",
     "@senda/shared": "*",
-    "@stellar/freighter-api": "^6.0.1",
     "@stellar/stellar-sdk": "^14.1.1",
     "clsx": "^2.1.1",
     "framer-motion": "^14.6.0",
@@ -36,6 +37,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.4.3",
     "tailwindcss": "^4",
+    "tsx": "^4.20.6",
     "typescript": "^5"
   }
 }
