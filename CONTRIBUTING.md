@@ -161,7 +161,7 @@ For manual test reports (screenshots + step-by-step verification of an issue), u
 - **URL**: https://senda-bussines.vercel.app (or http://localhost:3000)
 - **Network**: Stellar testnet
 - **Browser**: [Browser Name and Version]
-- **Wallet**: Freighter [version]
+- **Wallet**: [wallet name and version]
 - **Device**: [Desktop/Mobile/Tablet]
 
 ## Test Steps
